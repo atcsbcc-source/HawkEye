@@ -7,7 +7,7 @@ surfaces leads crossing a 60-day distress threshold for manual verification and
 CRM dispatch.
 
 ```
- Drone sortie ──► ortho crops ──► pipeline/run_pipeline.py
+ Drone sortie ──► stitched ortho ──► pipeline/crop_parcels.py ──► run_pipeline.py
                                     │  change_detector.py (ORB align → shadow-masked
                                     │  diff → lawn/vehicle signals → confidence)
                                     ▼
@@ -25,6 +25,7 @@ CRM dispatch.
 | Path | What it is |
 |---|---|
 | `supabase/migrations/` | SQL schema: tables, distress view, RLS, storage bucket, triggers |
+| `pipeline/crop_parcels.py` | Ortho-crop step: GeoTIFF orthomosaic → per-parcel Week T / T-1 crop pairs |
 | `pipeline/change_detector.py` | Core CV: alignment, illumination/shadow suppression, change + lawn + vehicle scoring |
 | `pipeline/run_pipeline.py` | Batch runner: analyze a flight's crops, upload imagery, upsert `property_scans` |
 | `dashboard/` | Next.js 14 (App Router) + TypeScript + Tailwind + Lucide command center |
@@ -52,6 +53,25 @@ Key behaviors baked into the schema:
 ```bash
 cd pipeline
 pip install -r requirements.txt
+```
+
+**Step 1 — crop parcels from the stitched ortho** (WebODM / DroneDeploy /
+Pix4D GeoTIFF, any CRS, north-up):
+
+```bash
+python crop_parcels.py --ortho FLT-2026-W35.tif \
+    --flight-code FLT-2026-W35-OAKWOOD \
+    --prev-flight-code FLT-2026-W34-OAKWOOD \
+    --parcels parcels.csv --out data/       # csv: parcel_id,lat,lng; omit to pull from Supabase
+```
+
+Writes `data/<flight_code>/<parcel_id>/current.jpg` (and copies last week's
+crop in as `previous.jpg`), skipping parcels outside the ortho's coverage. It
+prints the measured GSD to pass to the next step.
+
+**Step 2 — score a single pair** (or let `run_pipeline.py` batch it):
+
+```bash
 python change_detector.py --prev week_t-1.jpg --curr week_t.jpg \
     --gsd-cm 2.5 --debug-dir debug_out/
 ```
@@ -68,9 +88,11 @@ cp .env.example .env      # fill in SUPABASE_URL + service role key
 python run_pipeline.py --flight-code FLT-2026-W35-OAKWOOD --data-dir data/
 ```
 
-The vehicle detector is a calibrated contour heuristic (footprint area, aspect,
-rectangularity at your GSD). Swap in a YOLO model behind
-`detect_vehicle_boxes()` when you outgrow it — callers won't change.
+The vehicle detector segments car-footprint blobs whose color deviates from the
+surrounding pavement (robust to pavement-joint/curb clutter; blind spot: a gray
+car on gray pavement). Nodata borders from ortho coverage edges are masked out
+of every statistic. Swap in a YOLO model behind `detect_vehicle_boxes()` when
+you outgrow the heuristic — callers won't change.
 
 ## 3. Command center
 

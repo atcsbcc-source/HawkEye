@@ -45,6 +45,9 @@ SHADOW_CHROMA_TOL = 22         #   with near-unchanged chroma is called shadow
 VEHICLE_AREA_M2 = (5.5, 32.0)  # plausible car/truck footprint
 VEHICLE_ASPECT = (1.3, 4.0)    # length/width of a minAreaRect
 VEHICLE_RECTANGULARITY = 0.55  # contour area / minAreaRect area
+VEHICLE_L_DELTA = 30           # L* deviation from pavement median = candidate
+VEHICLE_CHROMA_DELTA = 22      # chroma deviation from pavement median = candidate
+NODATA_GRAY = 8                # pixels darker than this are ortho nodata border
 STATIC_IOU = 0.45              # box IoU across weeks to call a vehicle static
 FLAG_LOW_ALIGNMENT = 0.30      # below this inlier ratio, cap confidence
 
@@ -66,7 +69,9 @@ class ScanResult:
 # ---------------------------------------------------------------------------
 # Loading & alignment
 # ---------------------------------------------------------------------------
-def load_image(path: str | Path, max_dim: int = MAX_DIM) -> np.ndarray:
+def load_image(path: str | Path, max_dim: int = MAX_DIM) -> tuple[np.ndarray, float]:
+    """Load and cap to max_dim. Returns (image, scale) — callers must divide
+    the source GSD by `scale` so metric size filters stay correct."""
     img = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if img is None:
         raise FileNotFoundError(f"Could not read image: {path}")
@@ -75,7 +80,8 @@ def load_image(path: str | Path, max_dim: int = MAX_DIM) -> np.ndarray:
     if scale < 1.0:
         img = cv2.resize(img, (int(w * scale), int(h * scale)),
                          interpolation=cv2.INTER_AREA)
-    return img
+        return img, scale
+    return img, 1.0
 
 
 def align_images(prev: np.ndarray, curr: np.ndarray) -> tuple[np.ndarray, float]:
@@ -166,12 +172,21 @@ def vegetation_mask(prev: np.ndarray, curr: np.ndarray) -> np.ndarray:
     return (exg(prev) > 0.05) | (exg(curr) > 0.05)
 
 
+def validity_mask(prev: np.ndarray, curr: np.ndarray) -> np.ndarray:
+    """Pixels with real imagery in BOTH frames. Ortho crops near the coverage
+    boundary (and warped previous frames) carry black nodata borders that would
+    otherwise poison every statistic downstream."""
+    g_prev = cv2.cvtColor(prev, cv2.COLOR_BGR2GRAY)
+    g_curr = cv2.cvtColor(curr, cv2.COLOR_BGR2GRAY)
+    return (g_prev > NODATA_GRAY) & (g_curr > NODATA_GRAY)
+
+
 # ---------------------------------------------------------------------------
 # Persistent structural change
 # ---------------------------------------------------------------------------
 def persistent_change(lab_prev: np.ndarray, lab_curr: np.ndarray,
-                      shadows: np.ndarray,
-                      vegetation: np.ndarray) -> tuple[np.ndarray, float]:
+                      shadows: np.ndarray, vegetation: np.ndarray,
+                      valid: np.ndarray) -> tuple[np.ndarray, float]:
     """Absolute diff on normalized L + chroma — shadow- and vegetation-masked,
     blurred, and morphologically opened so only persistent *structural*
     differences survive (vegetation change is the lawn index's job).
@@ -184,13 +199,14 @@ def persistent_change(lab_prev: np.ndarray, lab_curr: np.ndarray,
     mask = (combined > DIFF_THRESHOLD).astype(np.uint8) * 255
     mask[shadows > 0] = 0
     mask[vegetation] = 0
+    mask[~valid] = 0
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (MORPH_KERNEL, MORPH_KERNEL))
     mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 
-    # Score over the non-vegetated area so a big lawn doesn't dilute it.
-    denom = max(1, int((~vegetation).sum()))
+    # Score over the valid non-vegetated area so a big lawn doesn't dilute it.
+    denom = max(1, int(((~vegetation) & valid).sum()))
     score = 100.0 * float((mask > 0).sum()) / denom
     return mask, round(min(score, 100.0), 2)
 
@@ -198,20 +214,29 @@ def persistent_change(lab_prev: np.ndarray, lab_curr: np.ndarray,
 # ---------------------------------------------------------------------------
 # Lawn growth index
 # ---------------------------------------------------------------------------
-def lawn_growth_index(prev: np.ndarray, curr: np.ndarray,
-                      veg: np.ndarray) -> tuple[float, dict]:
+def lawn_growth_index(prev: np.ndarray, curr: np.ndarray, veg: np.ndarray,
+                      valid: np.ndarray) -> tuple[float, dict]:
     """Excess-green vegetation index plus texture (Laplacian variance) over the
     vegetated region.
 
     Overgrown, unmowed turf is both greener-relative and rougher than a
     maintained lawn; the index is the blended week-over-week delta, clamped
     to [-1, 1]. Positive = growth/neglect, negative = fresh mow or die-off.
+
+    Greenness is center-weighted (Gaussian) because crops are centered on the
+    parcel centroid — neighboring lots at the edges shouldn't dilute the signal.
     """
     exg_prev, exg_curr = exg(prev), exg(curr)
+    veg = veg & valid
     if veg.mean() < 0.02:                          # no lawn in frame
         return 0.0, {"vegetated_fraction": round(float(veg.mean()), 4)}
 
-    greenness_delta = float(exg_curr[veg].mean() - exg_prev[veg].mean())
+    h, w = veg.shape
+    gy = np.exp(-0.5 * ((np.arange(h) - h / 2) / (0.30 * h)) ** 2)
+    gx = np.exp(-0.5 * ((np.arange(w) - w / 2) / (0.30 * w)) ** 2)
+    weights = np.outer(gy, gx) * veg
+    wsum = weights.sum() + 1e-6
+    greenness_delta = float(((exg_curr - exg_prev) * weights).sum() / wsum)
 
     def texture(img: np.ndarray) -> float:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -232,24 +257,36 @@ def lawn_growth_index(prev: np.ndarray, curr: np.ndarray,
 # ---------------------------------------------------------------------------
 # Vehicle presence / persistence
 # ---------------------------------------------------------------------------
-def detect_vehicle_boxes(img: np.ndarray, gsd_cm: float,
-                         vegetation: np.ndarray | None = None
-                         ) -> list[tuple[int, int, int, int]]:
-    """Heuristic car detector: strong-edge, car-footprint, roughly rectangular
-    blobs. Vegetated pixels are masked first — cars sit on pavement, and weed
-    texture otherwise floods the edge map. Good enough on 2-3 cm/px nadir
-    crops; swap in a YOLO detector for production without touching callers."""
+def detect_vehicle_boxes(img: np.ndarray, gsd_cm: float, vegetation: np.ndarray,
+                         valid: np.ndarray) -> list[tuple[int, int, int, int]]:
+    """Heuristic car detector: car-footprint, roughly rectangular blobs whose
+    color stands out from the surrounding pavement (L* or chroma deviation from
+    the non-vegetated median). Color segmentation survives pavement-joint and
+    curb clutter that defeats edge-based contouring; its known blind spot is a
+    gray car on gray pavement — swap in a YOLO detector behind this signature
+    for production without touching callers."""
     px_per_m = 100.0 / gsd_cm
     area_px = (VEHICLE_AREA_M2[0] * px_per_m ** 2, VEHICLE_AREA_M2[1] * px_per_m ** 2)
 
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 60, 160)
-    if vegetation is not None:
-        edges[vegetation] = 0
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-    closed = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=2)
+    stat = (~vegetation) & valid          # pavement/roof pixels with real data
+    if stat.mean() < 0.01:
+        return []
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)
+    median_l = np.median(lab[:, :, 0][stat])
+    chroma = np.abs(lab[:, :, 1] - 128) + np.abs(lab[:, :, 2] - 128)
+    median_chroma = np.median(chroma[stat])
 
-    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    candidates = (
+        (np.abs(lab[:, :, 0] - median_l) > VEHICLE_L_DELTA) |
+        (chroma - median_chroma > VEHICLE_CHROMA_DELTA)
+    ) & stat
+
+    mask = candidates.astype(np.uint8) * 255
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     boxes = []
     for c in contours:
         area = cv2.contourArea(c)
@@ -263,8 +300,7 @@ def detect_vehicle_boxes(img: np.ndarray, gsd_cm: float,
             continue
         if area / (rw * rh) < VEHICLE_RECTANGULARITY:
             continue
-        x, y, w, h = cv2.boundingRect(c)
-        boxes.append((x, y, w, h))
+        boxes.append(tuple(cv2.boundingRect(c)))
     return boxes
 
 
@@ -320,20 +356,24 @@ def compute_vacancy_confidence(change_score: float, lgi: float,
 # ---------------------------------------------------------------------------
 def analyze_pair(prev_path: str | Path, curr_path: str | Path,
                  gsd_cm: float = 2.5, debug_dir: str | Path | None = None) -> ScanResult:
-    prev = load_image(prev_path)
-    curr = load_image(curr_path)
+    prev, _ = load_image(prev_path)
+    curr, curr_scale = load_image(curr_path)
     if prev.shape != curr.shape:
         prev = cv2.resize(prev, (curr.shape[1], curr.shape[0]))
+    # Everything is scored in the (possibly downsized) current frame, so the
+    # effective ground resolution grows by the resize factor.
+    gsd_cm = gsd_cm / curr_scale
 
     warped_prev, quality = align_images(prev, curr)
     veg = vegetation_mask(warped_prev, curr)
+    valid = validity_mask(warped_prev, curr)
     lab_prev, lab_curr = normalize_illumination(warped_prev, curr)
     shadows = shadow_mask(lab_prev, lab_curr)
-    change_mask, change_score = persistent_change(lab_prev, lab_curr, shadows, veg)
-    lgi, lawn_details = lawn_growth_index(warped_prev, curr, veg)
+    change_mask, change_score = persistent_change(lab_prev, lab_curr, shadows, veg, valid)
+    lgi, lawn_details = lawn_growth_index(warped_prev, curr, veg, valid)
 
-    prev_boxes = detect_vehicle_boxes(warped_prev, gsd_cm, veg)
-    curr_boxes = detect_vehicle_boxes(curr, gsd_cm, veg)
+    prev_boxes = detect_vehicle_boxes(warped_prev, gsd_cm, veg, valid)
+    curr_boxes = detect_vehicle_boxes(curr, gsd_cm, veg, valid)
     vehicle_present, vehicle_static = vehicle_signals(prev_boxes, curr_boxes)
 
     confidence = compute_vacancy_confidence(
