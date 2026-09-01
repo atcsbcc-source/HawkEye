@@ -1,0 +1,4 @@
+opencv-python-headless>=4.9
+numpy>=1.26
+supabase>=2.6        # only needed by run_pipeline.py
+python-dotenv>=1.0   # only needed by run_pipeline.py
