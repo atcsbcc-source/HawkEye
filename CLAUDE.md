@@ -14,6 +14,7 @@ API stub) and an automation rules engine with an audit stream.
 | `pipeline/change_detector.py` | Pure numpy/cv2 CV core (alignment, masks, lawn/vehicle signals, confidence). |
 | `pipeline/crop_parcels.py` | GeoTIFF -> per-parcel crop pairs (rasterio). |
 | `pipeline/run_pipeline.py` | Batch runner: analyze, upload to Storage, upsert `property_scans`, notify the dashboard. |
+| `pipeline/intel/` | Vacancy model: `features.py` (factor vector), `model.py` (explainable logistic scorer + fit), `train.py` (refit from verdicts), `prior.json` (expert prior — keep `dashboard/lib/intel/prior.json` identical; a pytest enforces it). |
 | `pipeline/settings.py` | `load_env` / `require_env` / `require_https` — the only way env is read. |
 | `pipeline/tests/` | pytest suite with synthetic fixtures (no real imagery, no network). |
 | `dashboard/app/` | Pages + API routes (`api/missions`, `api/telemetry` SSE, `api/automation`, `api/audit`, `api/dispatch`). |
@@ -49,6 +50,14 @@ project `vsrrmqipgomrgxnkcfof`.
   events are DB-exclusive (an empty table is an empty list — there is no
   fallback to memory). Requires the login flow from the security package.
 - `missions` and the drone adapter are in-process only in both modes.
+
+## Scoring
+
+`vacancy_confidence` is produced by `intel.VacancyModel` (prior or trained
+`intel/model.json`) inside `run_pipeline.py`, never by hand-weighted code paths
+in the dashboard. `change_detector.compute_vacancy_confidence` remains only as
+the CLI's standalone fallback. Add a factor by extending `prior.json` (both
+copies), `features.py`, and the mock inputs in `dashboard/lib/mock.ts`.
 
 ## Thresholds live in exactly two places
 

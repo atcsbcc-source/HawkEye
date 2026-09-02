@@ -83,7 +83,31 @@ export interface PropertyScan {
   processed_at: string;
   /** Full pipeline JSON (`details.low_alignment`, vehicle boxes, ...). */
   raw_metrics?: Record<string, unknown> | null;
+  /** Intelligence-model breakdown behind `vacancy_confidence` (see lib/intel). */
+  factor_scores?: FactorScores | null;
+  model_version?: string | null;
   flight?: Flight;
+}
+
+/** One named factor the vacancy model scored: raw value, its z-score, the
+ *  model weight, and weight × z = contribution to the logit. */
+export interface FactorScore {
+  name: string;
+  label: string;
+  value: number | null;
+  z: number;
+  weight: number;
+  contribution: number;
+}
+
+/** `property_scans.factor_scores` — the model's explanation of a scan. */
+export interface FactorScores {
+  model_version: string;
+  probability: number;
+  confidence: number;
+  gated: boolean;
+  factors: FactorScore[];
+  top_drivers: string[];
 }
 
 /** Row shape of the `distressed_properties` view + what the grid renders. */

@@ -39,7 +39,8 @@ Requires Node 22 (`dashboard/.nvmrc`; >= 20 works) and Python 3.11.
 | `supabase/migrations/` | SQL schema: tables, distress view, RLS, storage bucket, triggers, seed rules |
 | `pipeline/crop_parcels.py` | Ortho-crop step: GeoTIFF orthomosaic → per-parcel Week T / T-1 crop pairs |
 | `pipeline/change_detector.py` | Core CV: alignment, illumination/shadow suppression, change + lawn + vehicle scoring |
-| `pipeline/run_pipeline.py` | Batch runner: analyze a flight's crops, upload imagery, upsert `property_scans` |
+| `pipeline/run_pipeline.py` | Batch runner: analyze a flight's crops, score with the model, upload imagery, upsert `property_scans` |
+| `pipeline/intel/` | Intelligence model: factor extraction, explainable logistic scorer, trainer, expert prior |
 | `pipeline/settings.py` | Env loading with readable failures (`require_env`, `require_https`) |
 | `pipeline/tests/` | pytest suite on synthetic imagery |
 | `dashboard/` | Next.js 14 (App Router) + TypeScript + Tailwind + Lucide command center |
@@ -147,6 +148,38 @@ surrounding pavement (robust to pavement-joint/curb clutter; blind spot: a gray
 car on gray pavement). Nodata borders from ortho coverage edges are masked out
 of every statistic. Swap in a YOLO model behind `detect_vehicle_boxes()` when
 you outgrow the heuristic — callers won't change.
+
+## Intelligence model
+
+Every scan is scored by a built-in, explainable vacancy model (`pipeline/intel/`),
+not a hand-tuned formula. As each image pair lands, the runner:
+
+1. extracts a **factor vector** — week-over-week lawn growth, absolute greenness
+   and turf roughness, how those compare with every other parcel in the same
+   flight (robust z-scores, so a wet week doesn't flag the whole grid), static /
+   absent vehicle, stillness (lack of structural activity), pavement clutter,
+   how many consecutive sorties looked suspicious, the overgrowth trend, and the
+   registration quality gate;
+2. scores it with a calibrated logistic model — `logit = bias + Σ weight × z`
+   — and stores the full breakdown (value, z, weight, contribution per factor,
+   top drivers) in `property_scans.factor_scores`;
+3. writes `vacancy_confidence` = the model's probability, which the Postgres
+   auto-flag trigger and the automation rules act on.
+
+The model ships with an expert prior (`intel/prior.json`; a copy in
+`dashboard/lib/intel/prior.json` powers mock mode — a test keeps them equal).
+Operator verdicts are the training signal:
+
+```bash
+python -m intel.train --dry-run      # fit from property_verifications, report weights
+python -m intel.train                # write intel/model.json + register in intel_models
+HAWKEYE_MODEL_PATH=path/to/model.json python run_pipeline.py ...   # pin a model
+```
+
+Training is L2-regularised toward the prior, so a handful of verdicts nudges the
+weights instead of overturning them; `intel_models` keeps every trained version
+with its sample count and log-loss/accuracy. The verification workspace shows the
+breakdown for the latest sortie (amber = evidence for vacancy, emerald = against).
 
 ## 3. Command center
 

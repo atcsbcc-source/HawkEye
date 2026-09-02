@@ -1,0 +1,19 @@
+{
+  "version": "prior-1",
+  "bias": -2.2,
+  "notes": "Expert prior. Weights apply to robust z-scores ((value - center) / scale). Retrain from operator verdicts with `python -m intel.train`.",
+  "factors": [
+    {"name": "lawn_growth", "label": "Lawn overgrowth (week over week)", "description": "Vegetation greener and rougher than last sortie", "center": 0.1, "scale": 0.4, "weight": 1.6},
+    {"name": "greenness_level", "label": "Absolute greenness", "description": "Excess-green index of the turf this week", "center": 0.12, "scale": 0.15, "weight": 0.5},
+    {"name": "texture_level", "label": "Turf roughness", "description": "Laplacian variance over vegetation — unmowed turf is rough", "center": 300, "scale": 400, "weight": 0.6},
+    {"name": "greenness_vs_grid", "label": "Greener than neighbours", "description": "Robust z-score of greenness against every parcel in the same flight", "center": 0, "scale": 1.5, "weight": 0.9},
+    {"name": "texture_vs_grid", "label": "Rougher than neighbours", "description": "Robust z-score of turf roughness against the flight", "center": 0, "scale": 1.5, "weight": 0.9},
+    {"name": "vehicle_static", "label": "Vehicle never moves", "description": "Same vehicle in the same spot as last sortie", "center": 0, "scale": 1, "weight": 1.0},
+    {"name": "vehicle_absent", "label": "No vehicle on parcel", "description": "Empty driveway this sortie", "center": 0, "scale": 1, "weight": 0.4},
+    {"name": "stillness", "label": "No structural activity", "description": "1 − change_score/12: little persistent change outside vegetation", "center": 0.5, "scale": 0.5, "weight": 1.1},
+    {"name": "clutter", "label": "Debris on pavement", "description": "Small anomalous blobs per 100 m² of pavement (bins, tarps, mail)", "center": 1.0, "scale": 2.0, "weight": 0.5},
+    {"name": "persistence_weeks", "label": "Consecutive weeks suspicious", "description": "Prior sorties in a row scoring ≥ 60", "center": 1, "scale": 3, "weight": 0.8},
+    {"name": "lgi_trend", "label": "Overgrowth trend", "description": "Slope of the lawn index over the last sorties (per week)", "center": 0, "scale": 0.1, "weight": 0.6},
+    {"name": "alignment_quality", "label": "Registration quality", "description": "ORB/RANSAC inlier ratio; below the threshold the score is capped", "center": 0, "scale": 1, "weight": 0, "gate": true, "threshold": 0.3, "cap": 0.4}
+  ]
+}

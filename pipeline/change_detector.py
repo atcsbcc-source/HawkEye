@@ -336,6 +336,52 @@ def vehicle_signals(prev_boxes: list, curr_boxes: list) -> tuple[bool, bool]:
 
 
 # ---------------------------------------------------------------------------
+# Scene descriptors (absolute, per-frame) consumed by the intelligence model
+# ---------------------------------------------------------------------------
+CLUTTER_AREA_M2 = (0.05, 3.0)  # debris / bins / tarps: bigger than noise, smaller than a car
+
+
+def scene_metrics(
+    img: np.ndarray, vegetation: np.ndarray, valid: np.ndarray, gsd_cm: float
+) -> dict:
+    """Absolute descriptors of the current frame: how green and how rough the
+    turf is on its own (not just week-over-week), how much of the parcel is
+    pavement, and a clutter index — small anomalous blobs per 100 m² of
+    pavement. The model compares these against the rest of the flight so a
+    parcel that is greener and rougher than its neighbours stands out even
+    when the whole grid is growing."""
+    veg_valid = vegetation & valid
+    pave = (~vegetation) & valid
+    out: dict = {
+        "vegetated_fraction": round(float(veg_valid.mean()), 4),
+        "pavement_fraction": round(float(pave.mean()), 4),
+        "greenness_level": None,
+        "texture_level": None,
+        "clutter_index": None,
+    }
+    if veg_valid.mean() >= 0.02:
+        out["greenness_level"] = round(float(exg(img)[veg_valid].mean()), 4)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        out["texture_level"] = round(float(cv2.Laplacian(gray, cv2.CV_32F)[veg_valid].var()), 2)
+    if pave.mean() >= 0.01:
+        px_per_m = 100.0 / gsd_cm
+        area_px = (CLUTTER_AREA_M2[0] * px_per_m**2, CLUTTER_AREA_M2[1] * px_per_m**2)
+        lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)
+        chroma = np.abs(lab[:, :, 1] - 128) + np.abs(lab[:, :, 2] - 128)
+        anomalous = (
+            (np.abs(lab[:, :, 0] - np.median(lab[:, :, 0][pave])) > VEHICLE_L_DELTA)
+            | (chroma - np.median(chroma[pave]) > VEHICLE_CHROMA_DELTA)
+        ) & pave
+        mask = anomalous.astype(np.uint8) * 255
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        blobs = sum(1 for c in contours if area_px[0] <= cv2.contourArea(c) <= area_px[1])
+        pave_m2 = float(pave.sum()) / px_per_m**2
+        out["clutter_index"] = round(blobs / max(pave_m2, 1.0) * 100.0, 3)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Composite confidence
 # ---------------------------------------------------------------------------
 def compute_vacancy_confidence(
@@ -398,6 +444,7 @@ def analyze_pair(
     prev_boxes = detect_vehicle_boxes(warped_prev, gsd_cm, veg, valid)
     curr_boxes = detect_vehicle_boxes(curr, gsd_cm, veg, valid)
     vehicle_present, vehicle_static = vehicle_signals(prev_boxes, curr_boxes)
+    scene = scene_metrics(curr, veg, valid, gsd_cm)
 
     confidence = compute_vacancy_confidence(
         change_score, lgi, vehicle_present, vehicle_static, quality
@@ -427,6 +474,7 @@ def analyze_pair(
             "vehicle_boxes_prev": prev_boxes,
             "vehicle_boxes_curr": curr_boxes,
             "shadow_fraction": round(float((shadows > 0).mean()), 4),
+            "scene": scene,
             "low_alignment": quality < FLAG_LOW_ALIGNMENT,
         },
     )

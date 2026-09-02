@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Pencil } from "lucide-react";
 import type { PropertyLead, PropertyScan } from "@/lib/types";
 import { fmtFullDate } from "@/lib/format";
+import { FactorBreakdown } from "./FactorBreakdown";
 import { ScanTimeline } from "./ScanTimeline";
 import { VerificationPanel } from "./VerificationPanel";
 
@@ -14,6 +15,7 @@ export function PropertyInsights({ lead, scans }: { lead: PropertyLead; scans: P
   const latestScanId = scans[0]?.id ?? null;
   return (
     <div className="space-y-4">
+      <FactorBreakdown scan={scans[0]} />
       <ScanTimeline scans={scans} />
       <VerificationPanel lead={lead} latestScanId={latestScanId} />
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
