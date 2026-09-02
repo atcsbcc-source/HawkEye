@@ -1,26 +1,54 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { evaluateRules } from "@/lib/server/ops";
-import type { TriggerType } from "@/lib/ops-types";
+import { AuthError, requirePipelineToken, requireUser, authErrorResponse } from "@/lib/server/auth";
+import { Evaluate } from "@/lib/server/schemas";
+import { parseJson } from "@/lib/server/validate";
+import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-const TRIGGERS: TriggerType[] = ["scan_processed", "distress_threshold", "mission_completed"];
-
 /**
  * POST { trigger, payload } — fire the automation engine for an external
- * event. The CV pipeline calls this after each scan upsert
- * (payload: { property_id, vacancy_confidence, ... }).
+ * event. The CV pipeline calls this after each scan upsert with
+ * `Authorization: Bearer $HAWKEYE_PIPELINE_TOKEN`; an admin session is also
+ * accepted (manual re-evaluation from the console).
  */
-export async function POST(req: Request) {
-  let body: { trigger?: TriggerType; payload?: Record<string, unknown> };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+export async function POST(req: NextRequest) {
+  let subject: string;
+  const token = requirePipelineToken(req, "HAWKEYE_PIPELINE_TOKEN");
+  if (token) {
+    subject = `token:${token.name}`;
+  } else {
+    try {
+      const user = await requireUser({ role: "admin" });
+      subject = `user:${user.id}`;
+    } catch (err) {
+      if (err instanceof AuthError) return authErrorResponse(err);
+      throw err;
+    }
   }
-  if (!body.trigger || !TRIGGERS.includes(body.trigger)) {
-    return NextResponse.json({ error: "valid trigger required" }, { status: 400 });
+
+  const rl = rateLimit("automation:evaluate", subject, 300);
+  if (!rl.ok) return rateLimitResponse(rl);
+
+  const body = await parseJson(req, Evaluate, { maxBytes: 8_192 });
+  if (!body.ok) return body.res;
+  const { trigger, payload } = body.data;
+
+  // Forward only the allowlisted projection — never the raw object.
+  const projected: Record<string, unknown> = {};
+  for (const key of [
+    "property_id",
+    "parcel_id",
+    "vacancy_confidence",
+    "days_distressed",
+    "missionId",
+    "name",
+  ] as const) {
+    const v = (payload as Record<string, unknown>)[key];
+    if (v !== undefined) projected[key] = v;
   }
-  const result = await evaluateRules(body.trigger, body.payload ?? {});
+
+  const result = await evaluateRules(trigger, projected);
   return NextResponse.json(result);
 }

@@ -1,36 +1,48 @@
-import { getAdapter, syncMissionProgress } from "@/lib/server/ops";
+import { withAuth } from "@/lib/server/auth";
+import { initialFrame, MAX_SSE_CLIENTS, subscribe, subscriberCount } from "@/lib/server/telemetry-hub";
 
 export const dynamic = "force-dynamic";
 
 /** GET /api/telemetry — 1 Hz server-sent-events stream of aircraft telemetry. */
-export async function GET() {
-  const encoder = new TextEncoder();
-  let interval: ReturnType<typeof setInterval> | undefined;
+export const GET = withAuth(async (req) => {
+  if (subscriberCount() >= MAX_SSE_CLIENTS) {
+    return new Response(JSON.stringify({ error: "Too many telemetry clients" }), {
+      status: 503,
+      headers: { "content-type": "application/json", "retry-after": "5" },
+    });
+  }
 
-  const stream = new ReadableStream({
+  let unsubscribe: (() => void) | null = null;
+  const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      const send = () => {
-        syncMissionProgress();
-        const frame = `data: ${JSON.stringify(getAdapter().telemetry())}\n\n`;
+      try {
+        unsubscribe = subscribe(controller);
+      } catch {
+        controller.close();
+        return;
+      }
+      controller.enqueue(initialFrame());
+      req.signal.addEventListener("abort", () => {
+        unsubscribe?.();
+        unsubscribe = null;
         try {
-          controller.enqueue(encoder.encode(frame));
+          controller.close();
         } catch {
-          if (interval) clearInterval(interval);
+          // already closed
         }
-      };
-      send();
-      interval = setInterval(send, 1000);
+      });
     },
     cancel() {
-      if (interval) clearInterval(interval);
+      unsubscribe?.();
+      unsubscribe = null;
     },
   });
 
   return new Response(stream, {
     headers: {
-      "Content-Type": "text/event-stream",
+      "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     },
   });
-}
+});

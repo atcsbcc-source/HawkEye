@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Crosshair, LayoutDashboard, Radar, Workflow } from "lucide-react";
 import "leaflet/dist/leaflet.css";
 import "./globals.css";
+import { SessionChip } from "@/components/auth/SessionChip";
 
 export const metadata: Metadata = {
   title: "HawkEye Command Center",
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   year: "numeric",
                 })}
               </span>
+              <SessionChip />
             </header>
             <div className="p-6">{children}</div>
           </main>

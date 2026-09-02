@@ -1,55 +1,64 @@
 import { NextResponse } from "next/server";
 import { createRule, listRules, setRuleEnabled } from "@/lib/server/ops";
-import type { ActionType, TriggerType } from "@/lib/ops-types";
+import { withAuth } from "@/lib/server/auth";
+import { RuleCreate, RulePatch } from "@/lib/server/schemas";
+import { apiError, parseJson } from "@/lib/server/validate";
+import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { assertSafeWebhookUrl, WebhookError } from "@/lib/server/safe-fetch";
 
 export const dynamic = "force-dynamic";
 
-const TRIGGERS: TriggerType[] = ["scan_processed", "distress_threshold", "mission_completed"];
-const ACTIONS: ActionType[] = ["flag_property", "dispatch_webhook", "notify"];
+const MAX_RULES = 100;
 
-export async function GET() {
+export const GET = withAuth(async () => {
   return NextResponse.json({ rules: await listRules() });
-}
+});
 
 /** POST { name, triggerType, triggerConfig, actionType, actionConfig } */
-export async function POST(req: Request) {
-  let body: any;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+export const POST = withAuth(async (req, user) => {
+  const rl = rateLimit("automation:post", user.id, 20);
+  if (!rl.ok) return rateLimitResponse(rl);
+
+  const body = await parseJson(req, RuleCreate);
+  if (!body.ok) return body.res;
+  const input = body.data;
+
+  if (input.actionConfig.url) {
+    try {
+      await assertSafeWebhookUrl(input.actionConfig.url);
+    } catch (err) {
+      const reason = err instanceof WebhookError ? err.message : "invalid webhook url";
+      return apiError(`actionConfig.url rejected: ${reason}`, 400);
+    }
   }
-  if (
-    !body.name ||
-    !TRIGGERS.includes(body.triggerType) ||
-    !ACTIONS.includes(body.actionType)
-  ) {
-    return NextResponse.json(
-      { error: "name, valid triggerType and actionType required" },
-      { status: 400 }
-    );
+
+  if ((await listRules()).length >= MAX_RULES) {
+    return apiError(`At most ${MAX_RULES} automation rules are allowed`, 409);
   }
+
   const rule = await createRule({
-    name: String(body.name),
-    triggerType: body.triggerType,
-    triggerConfig: body.triggerConfig ?? {},
-    actionType: body.actionType,
-    actionConfig: body.actionConfig ?? {},
+    name: input.name,
+    triggerType: input.triggerType,
+    triggerConfig: input.triggerConfig,
+    actionType: input.actionType,
+    actionConfig: input.actionConfig.url ? { url: input.actionConfig.url } : {},
   });
   return NextResponse.json({ rule });
-}
+});
 
 /** PATCH { id, enabled } */
-export async function PATCH(req: Request) {
-  let body: { id?: string; enabled?: boolean };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-  if (!body.id || typeof body.enabled !== "boolean") {
-    return NextResponse.json({ error: "id and enabled required" }, { status: 400 });
-  }
-  await setRuleEnabled(body.id, body.enabled);
+export const PATCH = withAuth(async (req, user) => {
+  const rl = rateLimit("automation:patch", user.id, 30);
+  if (!rl.ok) return rateLimitResponse(rl);
+
+  const body = await parseJson(req, RulePatch);
+  if (!body.ok) return body.res;
+  const { id, enabled } = body.data;
+
+  // setRuleEnabled returns void today; integrator may swap to its boolean return.
+  const exists = (await listRules()).some((r) => r.id === id);
+  if (!exists) return apiError("Rule not found", 404);
+
+  await setRuleEnabled(id, enabled);
   return NextResponse.json({ ok: true });
-}
+});
