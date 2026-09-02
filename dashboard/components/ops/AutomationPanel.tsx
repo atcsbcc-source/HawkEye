@@ -13,6 +13,14 @@ import {
 } from "@/lib/ops-types";
 import { fmtDateTime } from "@/lib/format";
 import { AUTO_FLAG_CONFIDENCE, DISTRESS_THRESHOLD_DAYS } from "@/lib/constants";
+import {
+  CRM_STAGES,
+  STAGE_LABEL,
+  VERDICT_LABEL,
+  VERIFICATION_VERDICTS,
+  type CrmStage,
+  type VerificationVerdict,
+} from "@/lib/types";
 import { useToast } from "@/components/ui/Toast";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { RefreshBadge } from "@/components/ui/RefreshBadge";
@@ -168,9 +176,18 @@ export function AutomationPanel() {
                       ` ≥ ${rule.triggerConfig.min_confidence ?? DEFAULT_MIN_CONFIDENCE}`}
                     {rule.triggerType === "distress_threshold" &&
                       ` ≥ ${rule.triggerConfig.min_days ?? DEFAULT_MIN_DAYS} d`}
+                    {rule.triggerType === "verdict_recorded" &&
+                      ` = ${verdictLabel(rule.triggerConfig.verdict)}`}
+                    {rule.triggerType === "stage_changed" &&
+                      ` → ${stageLabel(rule.triggerConfig.stage)}`}
                   </Chip>
                   <ArrowRight className="h-3.5 w-3.5 text-slate-500" aria-hidden />
-                  <Chip tone="amber">THEN {ACTION_LABELS[rule.actionType]}</Chip>
+                  <Chip tone="amber">
+                    THEN {ACTION_LABELS[rule.actionType]}
+                    {rule.actionType === "set_stage" && `: ${stageLabel(rule.actionConfig.stage)}`}
+                    {rule.actionType === "create_task" &&
+                      `: "${String(rule.actionConfig.title ?? "")}" +${rule.actionConfig.due_in_days ?? 3} d`}
+                  </Chip>
                 </div>
 
                 <p className="mt-2 font-mono text-[11px] text-slate-400">
@@ -187,6 +204,13 @@ export function AutomationPanel() {
     </div>
   );
 }
+
+const verdictLabel = (v: unknown) =>
+  typeof v === "string" && v in VERDICT_LABEL
+    ? VERDICT_LABEL[v as VerificationVerdict]
+    : "any verdict";
+const stageLabel = (v: unknown) =>
+  typeof v === "string" && v in STAGE_LABEL ? STAGE_LABEL[v as CrmStage] : "any stage";
 
 function Chip({ children, tone = "sky" }: { children: React.ReactNode; tone?: "sky" | "amber" }) {
   return (
@@ -215,6 +239,11 @@ function RuleBuilder({
   const [threshold, setThreshold] = useState(String(DEFAULT_MIN_CONFIDENCE));
   const [actionType, setActionType] = useState<ActionType>("flag_property");
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [verdict, setVerdict] = useState<VerificationVerdict | "">("verified_vacant");
+  const [triggerStage, setTriggerStage] = useState<CrmStage | "">("");
+  const [stage, setStage] = useState<CrmStage>("researching");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskDays, setTaskDays] = useState("3");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -227,8 +256,25 @@ function RuleBuilder({
         ? { min_confidence: Number(threshold) || DEFAULT_MIN_CONFIDENCE }
         : triggerType === "distress_threshold"
           ? { min_days: Number(threshold) || DEFAULT_MIN_DAYS }
-          : {};
-    const actionConfig = actionType === "dispatch_webhook" && webhookUrl ? { url: webhookUrl } : {};
+          : triggerType === "verdict_recorded"
+            ? verdict
+              ? { verdict }
+              : {}
+            : triggerType === "stage_changed"
+              ? triggerStage
+                ? { stage: triggerStage }
+                : {}
+              : {};
+    const actionConfig =
+      actionType === "dispatch_webhook"
+        ? webhookUrl
+          ? { url: webhookUrl }
+          : {}
+        : actionType === "set_stage"
+          ? { stage }
+          : actionType === "create_task"
+            ? { title: taskTitle.trim(), due_in_days: Math.max(0, Number(taskDays) || 0) }
+            : {};
     try {
       const res = await fetch("/api/automation", {
         method: "POST",
@@ -296,7 +342,7 @@ function RuleBuilder({
             </option>
           ))}
         </select>
-        {triggerType !== "mission_completed" ? (
+        {triggerType === "scan_processed" || triggerType === "distress_threshold" ? (
           <input
             className="input"
             type="number"
@@ -306,6 +352,34 @@ function RuleBuilder({
             aria-label={triggerType === "scan_processed" ? "Minimum confidence" : "Minimum days"}
             placeholder={triggerType === "scan_processed" ? "Min confidence" : "Min days"}
           />
+        ) : triggerType === "verdict_recorded" ? (
+          <select
+            className="input"
+            aria-label="Verdict"
+            value={verdict}
+            onChange={(e) => setVerdict(e.target.value as VerificationVerdict | "")}
+          >
+            <option value="">Any verdict</option>
+            {VERIFICATION_VERDICTS.map((v) => (
+              <option key={v} value={v}>
+                {VERDICT_LABEL[v]}
+              </option>
+            ))}
+          </select>
+        ) : triggerType === "stage_changed" ? (
+          <select
+            className="input"
+            aria-label="Stage entered"
+            value={triggerStage}
+            onChange={(e) => setTriggerStage(e.target.value as CrmStage | "")}
+          >
+            <option value="">Any stage</option>
+            {CRM_STAGES.map((st) => (
+              <option key={st} value={st}>
+                Enters {STAGE_LABEL[st]}
+              </option>
+            ))}
+          </select>
         ) : (
           <div />
         )}
@@ -332,6 +406,42 @@ function RuleBuilder({
           onChange={(e) => setWebhookUrl(e.target.value)}
         />
       )}
+      {actionType === "set_stage" && (
+        <select
+          className="input"
+          aria-label="Target stage"
+          value={stage}
+          onChange={(e) => setStage(e.target.value as CrmStage)}
+        >
+          {CRM_STAGES.map((st) => (
+            <option key={st} value={st}>
+              Move to {STAGE_LABEL[st]}
+            </option>
+          ))}
+        </select>
+      )}
+      {actionType === "create_task" && (
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+          <input
+            className="input"
+            placeholder="Task title (e.g. Skip-trace the owner)"
+            aria-label="Task title"
+            value={taskTitle}
+            maxLength={200}
+            onChange={(e) => setTaskTitle(e.target.value)}
+          />
+          <input
+            className="input"
+            type="number"
+            min={0}
+            max={365}
+            aria-label="Due in days"
+            placeholder="Due in days"
+            value={taskDays}
+            onChange={(e) => setTaskDays(e.target.value)}
+          />
+        </div>
+      )}
       {error && (
         <p
           role="alert"
@@ -341,7 +451,11 @@ function RuleBuilder({
         </p>
       )}
       <div className="flex items-center gap-2">
-        <button type="submit" disabled={saving || !name.trim()} className="btn-primary">
+        <button
+          type="submit"
+          disabled={saving || !name.trim() || (actionType === "create_task" && !taskTitle.trim())}
+          className="btn-primary"
+        >
           {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
           {saving ? "Saving…" : "Create rule"}
         </button>

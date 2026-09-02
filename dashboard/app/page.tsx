@@ -1,6 +1,8 @@
 import { Suspense } from "react";
-import { AlertTriangle, Building2, Plane, Send, Timer } from "lucide-react";
+import { AlertTriangle, Building2, ListTodo, Plane, Send, Timer } from "lucide-react";
 import { fetchLeads } from "@/lib/data";
+import { fetchOpenTasks } from "@/lib/crm-data";
+import { buildWorkQueue } from "@/lib/crm";
 import { DISTRESS_THRESHOLD_DAYS } from "@/lib/types";
 import { fmtDateTime, fmtRelative } from "@/lib/format";
 import { PropertyGrid } from "@/components/PropertyGrid";
@@ -26,7 +28,10 @@ export default function CommandCenter() {
 }
 
 async function CommandCenterBody() {
-  const leads = await fetchLeads();
+  const [leads, tasks] = await Promise.all([fetchLeads(), fetchOpenTasks()]);
+  const queue = buildWorkQueue(leads, tasks);
+  const dueNow = queue.filter((i) => i.bucket === "overdue" || i.bucket === "today");
+  const overdue = dueNow.filter((i) => i.bucket === "overdue").length;
   const source = process.env.NEXT_PUBLIC_SUPABASE_URL ? "supabase" : "mock";
 
   const flagged = leads.filter((l) => l.status === "flagged");
@@ -41,7 +46,7 @@ async function CommandCenterBody() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Tracked parcels"
           value={leads.length}
@@ -71,6 +76,14 @@ async function CommandCenterBody() {
           hint="handed off"
           href="/?status=dispatched"
           icon={<Send className="h-5 w-5 text-emerald-400" aria-hidden />}
+        />
+        <StatCard
+          label="Due today"
+          value={dueNow.length}
+          hint={overdue ? `${overdue} overdue` : `${queue.length} open items`}
+          href="/pipeline?view=queue"
+          tone={overdue ? "danger" : "warn"}
+          icon={<ListTodo className="h-5 w-5 text-amber-400" aria-hidden />}
         />
         <StatCard
           label="Last flight"

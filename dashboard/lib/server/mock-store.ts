@@ -1,7 +1,17 @@
 import { randomUUID } from "crypto";
-import type { FlagOutcome } from "../automation/actions";
-import { MOCK_FLIGHTS, MOCK_LEADS, mockScansFor, mockVerificationsFor } from "../mock";
+import type { FlagOutcome, StageOutcome, TaskOutcome } from "../automation/actions";
+import {
+  MOCK_FLIGHTS,
+  MOCK_LEADS,
+  mockActivitiesFor,
+  mockContactsFor,
+  mockScansFor,
+  mockVerificationsFor,
+} from "../mock";
 import type {
+  Activity,
+  Contact,
+  CrmStage,
   Flight,
   PropertyLead,
   PropertyScan,
@@ -19,6 +29,8 @@ interface MockStore {
   properties: PropertyLead[];
   verifications: PropertyVerification[];
   flights: Flight[];
+  contacts: Contact[];
+  activities: Activity[];
   /** `${ruleId}:${propertyId}` — mirrors automation_rule_firings. */
   firings: Set<string>;
 }
@@ -31,6 +43,8 @@ function store(): MockStore {
       properties: structuredClone(MOCK_LEADS),
       verifications: MOCK_LEADS.flatMap((l) => mockVerificationsFor(l.id)),
       flights: structuredClone(MOCK_FLIGHTS),
+      contacts: MOCK_LEADS.flatMap((l) => mockContactsFor(l.id)),
+      activities: MOCK_LEADS.flatMap((l) => mockActivitiesFor(l.id)),
       firings: new Set(),
     };
   }
@@ -97,6 +111,18 @@ export function mockCreateProperty(input: NewPropertyInput): PropertyLead {
     verification: null,
     verified_at: null,
     snoozed_until: null,
+    crm_stage: "new",
+    stage_changed_at: null,
+    priority: "normal",
+    assigned_to: null,
+    owner_name: null,
+    next_action: null,
+    next_action_at: null,
+    asking_price: null,
+    offer_price: null,
+    arv: null,
+    repair_estimate: null,
+    tags: [],
     days_distressed: null,
     latest_vacancy_confidence: null,
     latest_lawn_growth_index: null,
@@ -142,7 +168,23 @@ export function mockUpdateProperty(
   patch: Partial<
     Pick<
       PropertyLead,
-      "address" | "lat" | "lng" | "neighborhood" | "notes" | "status" | "first_flagged_at"
+      | "address"
+      | "lat"
+      | "lng"
+      | "neighborhood"
+      | "notes"
+      | "status"
+      | "first_flagged_at"
+      | "priority"
+      | "assigned_to"
+      | "owner_name"
+      | "next_action"
+      | "next_action_at"
+      | "asking_price"
+      | "offer_price"
+      | "arv"
+      | "repair_estimate"
+      | "tags"
     >
   >,
 ): PropertyLead | null {
@@ -267,6 +309,162 @@ export function mockDeleteFlight(id: string): boolean {
   const before = s.flights.length;
   s.flights = s.flights.filter((f) => f.id !== id);
   return s.flights.length !== before;
+}
+
+// ---------------------------------------------------------------------------
+// CRM — stage, contacts, activities / tasks
+// ---------------------------------------------------------------------------
+/** Move a parcel through the pipeline; writes the stage_change activity. */
+export function mockSetStage(
+  id: string,
+  stage: CrmStage,
+  by = "operator",
+  note?: string | null,
+): { outcome: StageOutcome; property: PropertyLead | null; previous: CrmStage | null } {
+  const p = store().properties.find((x) => x.id === id);
+  if (!p || p.archived_at) return { outcome: "not_found", property: null, previous: null };
+  const previous = p.crm_stage;
+  if (previous === stage) return { outcome: "unchanged", property: withDerived(p), previous };
+  p.crm_stage = stage;
+  p.stage_changed_at = new Date().toISOString();
+  store().activities.push({
+    id: randomUUID(),
+    property_id: p.id,
+    contact_id: null,
+    kind: "stage_change",
+    body: note ? `${previous} → ${stage} — ${note}` : `${previous} → ${stage}`,
+    outcome: null,
+    amount: null,
+    due_at: null,
+    completed_at: null,
+    created_by: by,
+    created_at: p.stage_changed_at,
+  });
+  return { outcome: "changed", property: withDerived(p), previous };
+}
+
+export function mockListContacts(propertyId: string): Contact[] {
+  return store()
+    .contacts.filter((c) => c.property_id === propertyId)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+}
+
+export type ContactInput = Omit<Contact, "id" | "property_id" | "created_at" | "updated_at">;
+
+export function mockCreateContact(propertyId: string, input: ContactInput): Contact | null {
+  const p = store().properties.find((x) => x.id === propertyId);
+  if (!p || p.archived_at) return null;
+  const now = new Date().toISOString();
+  const contact: Contact = {
+    ...input,
+    id: randomUUID(),
+    property_id: propertyId,
+    created_at: now,
+    updated_at: now,
+  };
+  store().contacts.push(contact);
+  return contact;
+}
+
+export function mockUpdateContact(
+  propertyId: string,
+  id: string,
+  patch: Partial<ContactInput>,
+): Contact | null {
+  const c = store().contacts.find((x) => x.id === id && x.property_id === propertyId);
+  if (!c) return null;
+  Object.assign(c, patch, { updated_at: new Date().toISOString() });
+  return c;
+}
+
+export function mockDeleteContact(propertyId: string, id: string): boolean {
+  const s = store();
+  const before = s.contacts.length;
+  s.contacts = s.contacts.filter((c) => !(c.id === id && c.property_id === propertyId));
+  if (s.contacts.length === before) return false;
+  for (const a of s.activities) if (a.contact_id === id) a.contact_id = null;
+  return true;
+}
+
+/** Newest first. */
+export function mockListActivities(propertyId: string): Activity[] {
+  return store()
+    .activities.filter((a) => a.property_id === propertyId)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+export type ActivityInput = Pick<Activity, "kind" | "body"> &
+  Partial<Pick<Activity, "contact_id" | "outcome" | "amount" | "due_at" | "created_by">>;
+
+export function mockCreateActivity(propertyId: string, input: ActivityInput): Activity | null {
+  const p = store().properties.find((x) => x.id === propertyId);
+  if (!p || p.archived_at) return null;
+  if (
+    input.contact_id &&
+    !store().contacts.some((c) => c.id === input.contact_id && c.property_id === propertyId)
+  ) {
+    return null;
+  }
+  const activity: Activity = {
+    id: randomUUID(),
+    property_id: propertyId,
+    contact_id: input.contact_id ?? null,
+    kind: input.kind,
+    body: input.body,
+    outcome: input.outcome ?? null,
+    amount: input.amount ?? null,
+    due_at: input.due_at ?? null,
+    completed_at: null,
+    created_by: input.created_by ?? "operator",
+    created_at: new Date().toISOString(),
+  };
+  store().activities.push(activity);
+  return activity;
+}
+
+export function mockUpdateActivity(
+  propertyId: string,
+  id: string,
+  patch: Partial<Pick<Activity, "body" | "outcome" | "due_at" | "completed_at">>,
+): Activity | null {
+  const a = store().activities.find((x) => x.id === id && x.property_id === propertyId);
+  if (!a) return null;
+  Object.assign(a, patch);
+  return a;
+}
+
+/** Every open task across non-archived parcels, soonest due first. */
+export function mockListOpenTasks(): Activity[] {
+  const live = new Set(mockListProperties().map((p) => p.id));
+  return store()
+    .activities.filter((a) => a.kind === "task" && !a.completed_at && live.has(a.property_id))
+    .sort((a, b) => (a.due_at ?? "").localeCompare(b.due_at ?? ""));
+}
+
+/** Rule-action adapters (see lib/automation/actions.ts ActionDeps). */
+export function mockSetStageForRule(propertyId: string, stage: string, by: string): StageOutcome {
+  return mockSetStage(propertyId, stage as CrmStage, by).outcome;
+}
+
+export function mockCreateTaskForRule(
+  propertyId: string,
+  title: string,
+  dueAt: string,
+  by: string,
+): TaskOutcome {
+  // Same idempotency as the DB path: one open task per (rule, parcel).
+  const dup = store().activities.some(
+    (a) =>
+      a.property_id === propertyId && a.kind === "task" && a.created_by === by && !a.completed_at,
+  );
+  if (dup) return "exists";
+  const created = mockCreateActivity(propertyId, {
+    kind: "task",
+    body: title,
+    due_at: dueAt,
+    created_by: by,
+  });
+  return created ? "created" : "not_found";
 }
 
 // ---------------------------------------------------------------------------

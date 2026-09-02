@@ -230,6 +230,48 @@ describe("RuleCreate", () => {
   });
 });
 
+describe("RuleCreate — workflow triggers/actions", () => {
+  it("accepts verdict_recorded → set_stage and stage_changed → create_task", () => {
+    expect(
+      RuleCreate.safeParse({
+        name: "Verified → stage",
+        triggerType: "verdict_recorded",
+        triggerConfig: { verdict: "verified_vacant" },
+        actionType: "set_stage",
+        actionConfig: { stage: "verified" },
+      }).success,
+    ).toBe(true);
+    expect(
+      RuleCreate.safeParse({
+        name: "Contract → task",
+        triggerType: "stage_changed",
+        triggerConfig: { stage: "under_contract" },
+        actionType: "create_task",
+        actionConfig: { title: "Order title search", due_in_days: 2 },
+      }).success,
+    ).toBe(true);
+    // Blank configs mean "any".
+    expect(
+      RuleCreate.safeParse({
+        name: "Any verdict",
+        triggerType: "verdict_recorded",
+        actionType: "notify",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects mismatched action configs and unknown stages", () => {
+    const bad = (over: Record<string, unknown>) =>
+      RuleCreate.safeParse({ name: "x", triggerType: "verdict_recorded", ...over }).success;
+    expect(bad({ actionType: "set_stage", actionConfig: {} })).toBe(false);
+    expect(bad({ actionType: "set_stage", actionConfig: { stage: "sold" } })).toBe(false);
+    expect(bad({ actionType: "create_task", actionConfig: {} })).toBe(false);
+    expect(bad({ actionType: "notify", actionConfig: { stage: "verified" } })).toBe(false);
+    expect(bad({ actionType: "notify", actionConfig: { title: "x" } })).toBe(false);
+    expect(bad({ triggerConfig: { verdict: "maybe" }, actionType: "notify" })).toBe(false);
+  });
+});
+
 describe("Evaluate / Dispatch (dev vs supabase mode)", () => {
   const prev = process.env.NEXT_PUBLIC_SUPABASE_URL;
   afterEach(() => {

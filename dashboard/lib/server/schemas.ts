@@ -1,5 +1,13 @@
 import { z } from "zod";
 import { ACTION_LABELS, TRIGGER_LABELS, type ActionType, type TriggerType } from "../ops-types";
+import {
+  CONTACT_CHANNELS,
+  CONTACT_ROLES,
+  CRM_STAGES,
+  LOGGABLE_ACTIVITY_KINDS,
+  PRIORITIES,
+  VERIFICATION_VERDICTS,
+} from "../types";
 import { isDevMode } from "./env";
 
 /**
@@ -30,6 +38,12 @@ export const ScanId = z
   .refine((v) => isDevMode() || UUID_RE.test(v), {
     message: "must be a uuid",
   });
+
+/** Contact / activity ids: seeded `m1-c1` style in mock mode, uuids in Supabase mode. */
+export const CrmId = ScanId;
+
+export const CrmStageEnum = z.enum(CRM_STAGES as [string, ...string[]]);
+export const VerdictEnum = z.enum(VERIFICATION_VERDICTS as [string, ...string[]]);
 
 // ---------------------------------------------------------------------------
 // Missions
@@ -92,9 +106,21 @@ const DistressTriggerConfig = z.strictObject({
   min_days: z.number().int().min(1).max(3650),
 });
 const EmptyConfig = z.strictObject({});
+const VerdictTriggerConfig = z.strictObject({
+  verdict: VerdictEnum.optional(),
+});
+const StageTriggerConfig = z.strictObject({
+  stage: CrmStageEnum.optional(),
+});
 
 export const ActionConfig = z.strictObject({
+  /** dispatch_webhook */
   url: z.string().url().max(2048).optional(),
+  /** set_stage */
+  stage: CrmStageEnum.optional(),
+  /** create_task */
+  title: z.string().trim().min(1).max(200).optional(),
+  due_in_days: z.number().int().min(0).max(365).optional(),
 });
 
 const ruleBase = {
@@ -120,11 +146,42 @@ export const RuleCreate = z
       triggerType: z.literal("mission_completed"),
       triggerConfig: EmptyConfig.default({}),
     }),
+    z.strictObject({
+      ...ruleBase,
+      triggerType: z.literal("verdict_recorded"),
+      triggerConfig: VerdictTriggerConfig.default({}),
+    }),
+    z.strictObject({
+      ...ruleBase,
+      triggerType: z.literal("stage_changed"),
+      triggerConfig: StageTriggerConfig.default({}),
+    }),
   ])
   .refine((r) => r.actionType === "dispatch_webhook" || r.actionConfig.url === undefined, {
     message: "actionConfig.url is only valid for dispatch_webhook",
     path: ["actionConfig", "url"],
-  });
+  })
+  .refine((r) => r.actionType !== "set_stage" || r.actionConfig.stage !== undefined, {
+    message: "set_stage needs actionConfig.stage",
+    path: ["actionConfig", "stage"],
+  })
+  .refine((r) => r.actionType === "set_stage" || r.actionConfig.stage === undefined, {
+    message: "actionConfig.stage is only valid for set_stage",
+    path: ["actionConfig", "stage"],
+  })
+  .refine((r) => r.actionType !== "create_task" || r.actionConfig.title !== undefined, {
+    message: "create_task needs actionConfig.title",
+    path: ["actionConfig", "title"],
+  })
+  .refine(
+    (r) =>
+      r.actionType === "create_task" ||
+      (r.actionConfig.title === undefined && r.actionConfig.due_in_days === undefined),
+    {
+      message: "actionConfig.title / due_in_days are only valid for create_task",
+      path: ["actionConfig", "title"],
+    },
+  );
 export type RuleCreateInput = z.infer<typeof RuleCreate>;
 
 export const RulePatch = z.strictObject({
@@ -158,6 +215,22 @@ export const Evaluate = z.discriminatedUnion("trigger", [
     payload: z.strictObject({
       missionId: z.uuid(),
       name: z.string().max(80).optional(),
+    }),
+  }),
+  z.strictObject({
+    trigger: z.literal("verdict_recorded"),
+    payload: z.strictObject({
+      property_id: PropertyId,
+      verdict: VerdictEnum,
+      vacancy_confidence: z.number().int().min(0).max(100).optional(),
+    }),
+  }),
+  z.strictObject({
+    trigger: z.literal("stage_changed"),
+    payload: z.strictObject({
+      property_id: PropertyId,
+      stage: CrmStageEnum,
+      previous_stage: CrmStageEnum.optional(),
     }),
   }),
 ]);
@@ -200,14 +273,96 @@ export const PropertyCreate = z.strictObject({
 });
 export type PropertyCreateInput = z.infer<typeof PropertyCreate>;
 
+const Money = z.number().finite().min(0).max(1_000_000_000);
+const IsoDateOrNull = z
+  .string()
+  .trim()
+  .refine((s) => s === "" || !Number.isNaN(new Date(s).getTime()), "must be a date")
+  .nullable();
+
 export const PropertyPatch = z.strictObject({
   address: z.string().trim().min(1).max(200).optional(),
   lat: Lat.optional(),
   lng: Lng.optional(),
   neighborhood: z.string().trim().max(80).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
+  // CRM
+  priority: z.enum(PRIORITIES as [string, ...string[]]).optional(),
+  assigned_to: z.string().trim().max(80).nullable().optional(),
+  owner_name: z.string().trim().max(120).nullable().optional(),
+  next_action: z.string().trim().max(200).nullable().optional(),
+  next_action_at: IsoDateOrNull.optional(),
+  asking_price: Money.nullable().optional(),
+  offer_price: Money.nullable().optional(),
+  arv: Money.nullable().optional(),
+  repair_estimate: Money.nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(24)).max(20).optional(),
 });
 export type PropertyPatchInput = z.infer<typeof PropertyPatch>;
+
+/** POST /api/properties/[id]/stage */
+export const StageChange = z.strictObject({
+  stage: CrmStageEnum,
+  note: z.string().trim().max(2000).nullish(),
+});
+export type StageChangeInput = z.infer<typeof StageChange>;
+
+// ---------------------------------------------------------------------------
+// CRM — contacts & activities
+// ---------------------------------------------------------------------------
+const contactFields = {
+  name: z.string().trim().min(1).max(120),
+  role: z.enum(CONTACT_ROLES as [string, ...string[]]).default("other"),
+  phone: z.string().trim().max(40).nullish(),
+  email: z.string().trim().email().max(254).or(z.literal("")).nullish(),
+  mailing_address: z.string().trim().max(300).nullish(),
+  preferred_channel: z.enum(CONTACT_CHANNELS as [string, ...string[]]).nullish(),
+  do_not_contact: z.boolean().default(false),
+  source: z.string().trim().max(80).nullish(),
+  notes: z.string().trim().max(2000).nullish(),
+};
+
+export const ContactCreate = z.strictObject(contactFields);
+export type ContactCreateInput = z.infer<typeof ContactCreate>;
+
+export const ContactPatch = z.strictObject({
+  name: contactFields.name.optional(),
+  role: z.enum(CONTACT_ROLES as [string, ...string[]]).optional(),
+  phone: contactFields.phone,
+  email: contactFields.email,
+  mailing_address: contactFields.mailing_address,
+  preferred_channel: contactFields.preferred_channel,
+  do_not_contact: z.boolean().optional(),
+  source: contactFields.source,
+  notes: contactFields.notes,
+});
+export type ContactPatchInput = z.infer<typeof ContactPatch>;
+
+export const ActivityCreate = z
+  .strictObject({
+    kind: z.enum(LOGGABLE_ACTIVITY_KINDS as [string, ...string[]]),
+    body: z.string().trim().min(1).max(4000),
+    outcome: z.string().trim().max(120).nullish(),
+    amount: Money.nullish(),
+    contact_id: CrmId.nullish(),
+    due_at: IsoDateOrNull.optional(),
+  })
+  .refine((a) => a.kind !== "task" || (a.due_at != null && a.due_at !== ""), {
+    message: "a task needs a due date",
+    path: ["due_at"],
+  });
+export type ActivityCreateInput = z.infer<typeof ActivityCreate>;
+
+/** PATCH /api/properties/[id]/activities/[activityId] — complete / reopen / edit. */
+export const ActivityPatch = z
+  .strictObject({
+    completed: z.boolean().optional(),
+    body: z.string().trim().min(1).max(4000).optional(),
+    outcome: z.string().trim().max(120).nullable().optional(),
+    due_at: IsoDateOrNull.optional(),
+  })
+  .refine((p) => Object.keys(p).length > 0, { message: "nothing to update" });
+export type ActivityPatchInput = z.infer<typeof ActivityPatch>;
 
 export const Verify = z.strictObject({
   verdict: z.enum(["verified_vacant", "false_positive", "occupied", "needs_recheck"]),

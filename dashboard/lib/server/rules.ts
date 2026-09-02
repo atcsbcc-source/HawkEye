@@ -7,7 +7,7 @@ import { executeAction, type ActionDeps } from "../automation/actions";
 import { postJson as safePostJson } from "./safe-fetch";
 import { pushEvent } from "./audit";
 import { must } from "./db";
-import { mockFlagProperty } from "./mock-store";
+import { mockCreateTaskForRule, mockFlagProperty, mockSetStageForRule } from "./mock-store";
 import { getOpsState } from "./state";
 
 /**
@@ -20,6 +20,8 @@ import { getOpsState } from "./state";
 export const DEFAULT_RULE_IDS = {
   flag: "00000000-0000-4000-8000-000000000001",
   dispatch: "00000000-0000-4000-8000-000000000002",
+  verifiedStage: "00000000-0000-4000-8000-000000000003",
+  verifiedTask: "00000000-0000-4000-8000-000000000004",
 } as const;
 
 export const DEFAULT_RULES: AutomationRule[] = [
@@ -42,6 +44,29 @@ export const DEFAULT_RULES: AutomationRule[] = [
     actionType: "dispatch_webhook",
     actionConfig: {},
     enabled: false,
+    lastFiredAt: null,
+    fireCount: 0,
+  },
+  // Workflow defaults (20260904000000_crm.sql seeds the same two, enabled).
+  {
+    id: DEFAULT_RULE_IDS.verifiedStage,
+    name: "Verified vacant → Verified stage",
+    triggerType: "verdict_recorded",
+    triggerConfig: { verdict: "verified_vacant" },
+    actionType: "set_stage",
+    actionConfig: { stage: "verified" },
+    enabled: true,
+    lastFiredAt: null,
+    fireCount: 0,
+  },
+  {
+    id: DEFAULT_RULE_IDS.verifiedTask,
+    name: "Verified vacant → open skip-trace task",
+    triggerType: "verdict_recorded",
+    triggerConfig: { verdict: "verified_vacant" },
+    actionType: "create_task",
+    actionConfig: { title: "Skip-trace the owner and add a contact", due_in_days: 3 },
+    enabled: true,
     lastFiredAt: null,
     fireCount: 0,
   },
@@ -204,6 +229,13 @@ const mockModePostJson: ActionDeps["postJson"] = async () => {
   });
 };
 
+/** Actions whose side effect lands on the parcel in `payload.property_id`. */
+const PROPERTY_ACTIONS: ReadonlySet<AutomationRule["actionType"]> = new Set([
+  "flag_property",
+  "set_stage",
+  "create_task",
+] as const);
+
 export interface EvaluateOptions {
   /** Restrict evaluation to these rule ids (the sweep passes its pending set). */
   only?: readonly string[];
@@ -227,6 +259,8 @@ export async function evaluateRules(
     db,
     postJson: db ? safePostJson : mockModePostJson,
     flagWithoutDb: mockFlagProperty,
+    setStageWithoutDb: mockSetStageForRule,
+    createTaskWithoutDb: mockCreateTaskForRule,
   };
   const fired: string[] = [];
   const outcomes: RuleOutcome[] = [];
@@ -265,14 +299,13 @@ export async function evaluateRules(
       detail: { name: rule.name, trigger, payload, ok: result.ok },
     });
     if (result.eventType) {
+      const onProperty =
+        PROPERTY_ACTIONS.has(rule.actionType) && typeof payload.property_id === "string";
       await pushEvent({
         actor: `rule:${rule.id}`,
         eventType: result.eventType,
-        subjectType: rule.actionType === "flag_property" ? "property" : "rule",
-        subjectId:
-          rule.actionType === "flag_property" && typeof payload.property_id === "string"
-            ? payload.property_id
-            : rule.id,
+        subjectType: onProperty ? "property" : "rule",
+        subjectId: onProperty ? (payload.property_id as string) : rule.id,
         detail: { rule: rule.name, ...result.detail },
       });
     }

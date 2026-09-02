@@ -17,7 +17,9 @@ API stub) and an automation rules engine with an audit stream.
 | `pipeline/intel/` | Vacancy model: `features.py` (factor vector), `model.py` (explainable logistic scorer + fit), `train.py` (refit from verdicts), `prior.json` (expert prior — keep `dashboard/lib/intel/prior.json` identical; a pytest enforces it). |
 | `pipeline/settings.py` | `load_env` / `require_env` / `require_https` — the only way env is read. |
 | `pipeline/tests/` | pytest suite with synthetic fixtures (no real imagery, no network). |
-| `dashboard/app/` | Pages + API routes (`api/missions`, `api/telemetry` SSE, `api/automation`, `api/audit`, `api/dispatch`). |
+| `dashboard/app/` | Pages + API routes (`api/missions`, `api/telemetry` SSE, `api/automation`, `api/audit`, `api/dispatch`, `api/properties/[id]/{stage,contacts,activities}`). `/pipeline` (board + work queue) and `/review` (keyboard verification queue) are the CRM/workflow pages. |
+| `dashboard/lib/crm.ts` | Pure CRM helpers (stage order, due buckets, `buildWorkQueue`, MAO). `lib/crm-data.ts` is the dual-mode read layer for contacts / activities / open tasks. |
+| `dashboard/components/crm/` | DealPanel, ContactsCard, ActivityFeed (property page), PipelineBoard + WorkQueue (`/pipeline`), ReviewQueue (`/review`). |
 | `dashboard/lib/server/ops.ts` | Barrel for the ops layer; routes import only from here. |
 | `dashboard/lib/server/{state,missions,audit,rules,db}.ts` | Ops implementation (globalThis singleton, mission queue, audit, rule store, `DbError`/`must`). |
 | `dashboard/lib/automation/{evaluate,actions}.ts` | Pure rule evaluator + dependency-injected action executor. |
@@ -79,7 +81,15 @@ AND add a new migration that `create or replace`s the trigger function.
 - `lib/automation/*` must stay free of `lib/supabase.ts` / `lib/server`
   imports (pure, unit-testable); side effects are injected via `ActionDeps`.
 - Mock-mode default rule ids are fixed UUIDs
-  (`00000000-0000-4000-8000-000000000001/2`) matching the seed migration.
+  (`00000000-0000-4000-8000-000000000001..4`) matching the seed migrations
+  (`…0003/4` are the verified-vacant → stage / task workflow rules from
+  `20260904000000_crm.sql`).
+- Workflow triggers `verdict_recorded` / `stage_changed` and actions
+  `set_stage` / `create_task` live in the same rule engine; adding a trigger
+  or action means: `ops-types.ts` labels, `schemas.ts` (RuleCreate + Evaluate),
+  `automation/{evaluate,actions}.ts`, a mock-store adapter in `rules.ts`, the
+  `automation_rules` check constraints (new migration), and the rule builder
+  in `components/ops/AutomationPanel.tsx`.
 - Env is read once through `settings.py` (pipeline) — never echo env values.
 
 ## Tests

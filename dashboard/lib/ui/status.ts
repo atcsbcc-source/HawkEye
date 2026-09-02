@@ -1,4 +1,4 @@
-import type { LeadStatus } from "../types";
+import type { CrmStage, LeadStatus, Priority } from "../types";
 import type { DroneState, MissionStatus } from "../ops-types";
 
 /**
@@ -38,6 +38,80 @@ export const LEAD_STATUS: Record<LeadStatus, StatusStyle> = {
     badge: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
     dot: "bg-status-dispatched",
     hex: "#34d399",
+  },
+};
+
+/** Deal pipeline stages: slate while nothing is happening, sky through the
+ *  working stages, emerald/red when closed. */
+export const CRM_STAGE: Record<CrmStage, StatusStyle> = {
+  new: {
+    label: "New",
+    badge: "border-slate-500/40 bg-slate-500/15 text-slate-300",
+    dot: "bg-slate-400",
+    hex: "#94a3b8",
+  },
+  verified: {
+    label: "Verified",
+    badge: "border-amber-500/40 bg-amber-500/15 text-amber-300",
+    dot: "bg-amber-400",
+    hex: "#fbbf24",
+  },
+  researching: {
+    label: "Researching",
+    badge: "border-violet-500/40 bg-violet-500/15 text-violet-300",
+    dot: "bg-violet-400",
+    hex: "#a78bfa",
+  },
+  outreach: {
+    label: "Outreach",
+    badge: "border-sky-500/40 bg-sky-500/15 text-sky-300",
+    dot: "bg-sky-400",
+    hex: "#38bdf8",
+  },
+  negotiating: {
+    label: "Negotiating",
+    badge: "border-cyan-500/40 bg-cyan-500/15 text-cyan-300",
+    dot: "bg-cyan-400",
+    hex: "#22d3ee",
+  },
+  under_contract: {
+    label: "Under contract",
+    badge: "border-teal-500/40 bg-teal-500/15 text-teal-300",
+    dot: "bg-teal-400",
+    hex: "#2dd4bf",
+  },
+  closed_won: {
+    label: "Closed won",
+    badge: "border-emerald-500/40 bg-emerald-500/15 text-emerald-300",
+    dot: "bg-emerald-400",
+    hex: "#34d399",
+  },
+  closed_lost: {
+    label: "Closed lost",
+    badge: "border-red-500/40 bg-red-500/15 text-red-300",
+    dot: "bg-red-400",
+    hex: "#f87171",
+  },
+};
+
+export const PRIORITY_STYLE: Record<Priority, StatusStyle> = {
+  low: {
+    label: "Low",
+    badge: "border-slate-500/40 bg-slate-500/15 text-slate-400",
+    dot: "bg-slate-500",
+    hex: "#64748b",
+  },
+  normal: {
+    label: "Normal",
+    badge: "border-slate-500/40 bg-slate-500/15 text-slate-300",
+    dot: "bg-slate-400",
+    hex: "#94a3b8",
+  },
+  high: {
+    label: "High",
+    badge: "border-red-500/40 bg-red-500/15 text-red-300",
+    dot: "bg-red-400",
+    hex: "#f87171",
   },
 };
 

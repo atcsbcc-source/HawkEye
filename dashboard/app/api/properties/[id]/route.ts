@@ -26,8 +26,17 @@ export const PATCH = withAuth<Params>(async (req, user, { params }) => {
   const body = await parseJson(req, PropertyPatch, { maxBytes: 8_192 });
   if (!body.ok) return body.res;
   const patch: Record<string, unknown> = { ...body.data };
-  if ("neighborhood" in patch && !patch.neighborhood) patch.neighborhood = null;
-  if ("notes" in patch && !patch.notes) patch.notes = null;
+  for (const k of ["neighborhood", "notes", "assigned_to", "owner_name", "next_action"]) {
+    if (k in patch && !patch[k]) patch[k] = null;
+  }
+  if ("next_action_at" in patch) {
+    patch.next_action_at = patch.next_action_at
+      ? new Date(String(patch.next_action_at)).toISOString()
+      : null;
+  }
+  if (Array.isArray(patch.tags)) {
+    patch.tags = Array.from(new Set((patch.tags as string[]).map((t) => t.toLowerCase())));
+  }
   if (Object.keys(patch).length === 0) return apiError("No editable fields supplied", 400);
 
   const db = getServiceSupabase();

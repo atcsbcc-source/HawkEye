@@ -12,6 +12,11 @@ export function num(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/** Coerce to a trimmed string; non-strings count as "". */
+export function str(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 /** Does the trigger payload satisfy the rule's condition? */
 export function conditionMet(rule: AutomationRule, payload: Record<string, unknown>): boolean {
   switch (rule.triggerType) {
@@ -25,6 +30,15 @@ export function conditionMet(rule: AutomationRule, payload: Record<string, unkno
     }
     case "mission_completed":
       return true;
+    case "verdict_recorded": {
+      // Blank config = any verdict; otherwise the verdict must match exactly.
+      const want = str(rule.triggerConfig.verdict);
+      return want === "" || want === str(payload.verdict);
+    }
+    case "stage_changed": {
+      const want = str(rule.triggerConfig.stage);
+      return want === "" || want === str(payload.stage);
+    }
     default:
       return false;
   }

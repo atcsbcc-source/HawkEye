@@ -4,11 +4,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExternalLink, MapPin, Radar, StickyNote } from "lucide-react";
 import { fetchLead, fetchScans } from "@/lib/data";
+import { fetchActivities, fetchContacts } from "@/lib/crm-data";
 import { DISTRESS_THRESHOLD_DAYS, VERDICT_LABEL, type PropertyLead } from "@/lib/types";
 import { fmtDate, fmtDays } from "@/lib/format";
 import { LEAD_STATUS } from "@/lib/ui/status";
 import { CompareViewer, DispatchCard, VerificationProvider } from "@/components/CompareViewer";
 import { PropertyInsights } from "@/components/property/PropertyInsights";
+import { ActivityFeed } from "@/components/crm/ActivityFeed";
+import { ContactsCard } from "@/components/crm/ContactsCard";
+import { DealPanel } from "@/components/crm/DealPanel";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { PropertySkeleton } from "@/components/ui/PageSkeletons";
 import { SetHeaderTitle } from "@/components/shell/HeaderTitle";
@@ -44,7 +48,11 @@ export default async function PropertyDetail({ params }: { params: { id: string 
 }
 
 async function PropertyBody({ lead }: { lead: PropertyLead }) {
-  const scans = await fetchScans(lead.id);
+  const [scans, contacts, activities] = await Promise.all([
+    fetchScans(lead.id),
+    fetchContacts(lead.id),
+    fetchActivities(lead.id),
+  ]);
 
   const overThreshold = (lead.days_distressed ?? 0) >= DISTRESS_THRESHOLD_DAYS;
   const alreadyDispatched = lead.status === "dispatched";
@@ -83,6 +91,7 @@ async function PropertyBody({ lead }: { lead: PropertyLead }) {
           address={lead.address}
         />
         <PropertyInsights lead={lead} scans={scans} />
+        <ActivityFeed propertyId={lead.id} initial={activities} contacts={contacts} />
       </div>
 
       {/* Right rail */}
@@ -148,6 +157,9 @@ async function PropertyBody({ lead }: { lead: PropertyLead }) {
             </a>
           </div>
         </section>
+
+        <DealPanel lead={lead} />
+        <ContactsCard propertyId={lead.id} initial={contacts} />
 
         {lead.notes && (
           <section className="panel p-4" aria-labelledby="notes-title">

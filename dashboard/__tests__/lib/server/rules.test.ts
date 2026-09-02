@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_RULE_IDS, evaluateRules, listRules, setRuleEnabled } from "@/lib/server/rules";
 import { listEvents } from "@/lib/server/audit";
-import { mockGetProperty, resetMockStore } from "@/lib/server/mock-store";
+import { mockGetProperty, mockListOpenTasks, resetMockStore } from "@/lib/server/mock-store";
 import { resetOpsState } from "@/lib/server/state";
 
 // Force mock mode regardless of the developer's shell.
@@ -114,5 +114,48 @@ describe("evaluateRules (mock mode)", () => {
     const events = await listEvents();
     expect(events.some((e) => e.eventType === "webhook.delivered")).toBe(false);
     expect(events.some((e) => e.eventType === "webhook.failed")).toBe(true);
+  });
+
+  it("a verified_vacant verdict moves the parcel to Verified and opens the skip-trace task", async () => {
+    expect(mockGetProperty("m3")!.crm_stage).toBe("new");
+    const result = await evaluateRules("verdict_recorded", {
+      property_id: "m3",
+      verdict: "verified_vacant",
+    });
+    expect(result.matched).toBe(2);
+    expect(result.fired.sort()).toEqual([
+      "Verified vacant → Verified stage",
+      "Verified vacant → open skip-trace task",
+    ]);
+    expect(mockGetProperty("m3")!.crm_stage).toBe("verified");
+    const task = mockListOpenTasks().find((t) => t.property_id === "m3");
+    expect(task?.body).toMatch(/skip-trace/i);
+    expect(task?.created_by).toBe(`rule:${DEFAULT_RULE_IDS.verifiedTask}`);
+    const events = await listEvents();
+    expect(events.filter((e) => e.eventType === "property.stage_changed")).toHaveLength(1);
+    expect(events.find((e) => e.eventType === "task.created")).toMatchObject({
+      subjectType: "property",
+      subjectId: "m3",
+    });
+
+    // Re-recording the same verdict is a no-op: stage unchanged, no second task.
+    const again = await evaluateRules("verdict_recorded", {
+      property_id: "m3",
+      verdict: "verified_vacant",
+    });
+    expect(again.fired).toEqual([]);
+    expect(again.outcomes.every((o) => o.skipped)).toBe(true);
+    expect(mockListOpenTasks().filter((t) => t.property_id === "m3")).toHaveLength(1);
+  });
+
+  it("other verdicts leave the pipeline alone", async () => {
+    const result = await evaluateRules("verdict_recorded", {
+      property_id: "m3",
+      verdict: "occupied",
+    });
+    expect(result.matched).toBe(2);
+    expect(result.fired).toEqual([]);
+    expect(result.outcomes).toEqual([]);
+    expect(mockGetProperty("m3")!.crm_stage).toBe("new");
   });
 });

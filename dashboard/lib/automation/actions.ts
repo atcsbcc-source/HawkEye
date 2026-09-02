@@ -7,10 +7,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AUTO_FLAG_CONFIDENCE } from "../constants";
 import type { AutomationRule } from "../ops-types";
-import { num } from "./evaluate";
+import { num, str } from "./evaluate";
 
 /** Result of a store-backed flag attempt (mock mode). */
 export type FlagOutcome = "flagged" | "already_flagged" | "not_flaggable";
+/** Result of a store-backed stage change (mock mode). */
+export type StageOutcome = "changed" | "unchanged" | "not_found";
+/** Result of a store-backed task creation (mock mode). */
+export type TaskOutcome = "created" | "exists" | "not_found";
 
 export interface ActionDeps {
   db: SupabaseClient | null;
@@ -22,6 +26,15 @@ export interface ActionDeps {
    * `not_flaggable` covers unknown, archived, dispatched and snoozed parcels.
    */
   flagWithoutDb?: (propertyId: string) => FlagOutcome;
+  /** Mock-mode stage setter (set_stage). */
+  setStageWithoutDb?: (propertyId: string, stage: string, by: string) => StageOutcome;
+  /** Mock-mode task creator (create_task); `exists` = an open task from this rule is already there. */
+  createTaskWithoutDb?: (
+    propertyId: string,
+    title: string,
+    dueAt: string,
+    by: string,
+  ) => TaskOutcome;
 }
 
 export interface ActionResult {
@@ -58,6 +71,10 @@ export async function executeAction(
       // The rule.fired audit event doubles as the notification channel until
       // email/Slack is wired.
       return { ok: true, detail: {} };
+    case "set_stage":
+      return setStage(rule, payload, deps);
+    case "create_task":
+      return createTask(rule, payload, deps);
     default:
       return { ok: false, detail: { reason: "unknown action" } };
   }
@@ -185,4 +202,137 @@ async function dispatchWebhook(
       detail: { error: message, ms, ...(typeof kind === "string" ? { kind } : {}) },
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Workflow actions
+// ---------------------------------------------------------------------------
+const STAGES = new Set([
+  "new",
+  "verified",
+  "researching",
+  "outreach",
+  "negotiating",
+  "under_contract",
+  "closed_won",
+  "closed_lost",
+]);
+
+/** Move the parcel to `actionConfig.stage`; a no-op when it is already there. */
+async function setStage(
+  rule: AutomationRule,
+  payload: Record<string, unknown>,
+  { db, setStageWithoutDb }: ActionDeps,
+): Promise<ActionResult> {
+  const propertyId = payload.property_id;
+  if (typeof propertyId !== "string" || !propertyId) {
+    return skip({ skipped: "no property_id" });
+  }
+  const stage = str(rule.actionConfig.stage);
+  if (!STAGES.has(stage)) return { ok: false, detail: { error: "invalid stage", stage } };
+  const by = `rule:${rule.id}`;
+  if (!db) {
+    if (!setStageWithoutDb) return skip({ skipped: "no database" });
+    const outcome = setStageWithoutDb(propertyId, stage, by);
+    if (outcome !== "changed") {
+      return skip({ skipped: outcome.replace("_", " "), property_id: propertyId, stage });
+    }
+    return {
+      ok: true,
+      eventType: "property.stage_changed",
+      detail: { property_id: propertyId, stage },
+    };
+  }
+  const { data: current, error: curErr } = await db
+    .from("properties")
+    .select("crm_stage, archived_at")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (curErr) throw new Error(`select properties: ${curErr.message}`);
+  if (!current || current.archived_at) {
+    return skip({ skipped: "not found", property_id: propertyId });
+  }
+  if (current.crm_stage === stage) {
+    return skip({ skipped: "unchanged", property_id: propertyId, stage });
+  }
+  const now = new Date().toISOString();
+  const { error } = await db
+    .from("properties")
+    .update({ crm_stage: stage, stage_changed_at: now })
+    .eq("id", propertyId)
+    .is("archived_at", null);
+  if (error) throw new Error(`update properties.crm_stage: ${error.message}`);
+  const { error: actErr } = await db.from("activities").insert({
+    property_id: propertyId,
+    kind: "stage_change",
+    body: `${current.crm_stage} → ${stage}`,
+    created_by: by,
+  });
+  if (actErr) throw new Error(`insert activities: ${actErr.message}`);
+  return {
+    ok: true,
+    eventType: "property.stage_changed",
+    detail: { property_id: propertyId, stage, previous_stage: current.crm_stage },
+  };
+}
+
+/** Open a follow-up task on the parcel, due `due_in_days` from now (default 3). */
+async function createTask(
+  rule: AutomationRule,
+  payload: Record<string, unknown>,
+  { db, createTaskWithoutDb }: ActionDeps,
+): Promise<ActionResult> {
+  const propertyId = payload.property_id;
+  if (typeof propertyId !== "string" || !propertyId) {
+    return skip({ skipped: "no property_id" });
+  }
+  const title = str(rule.actionConfig.title).slice(0, 200);
+  if (!title) return { ok: false, detail: { error: "task title missing" } };
+  const days = Math.min(365, Math.max(0, num(rule.actionConfig.due_in_days, 3)));
+  const dueAt = new Date(Date.now() + days * 86_400_000).toISOString();
+  const by = `rule:${rule.id}`;
+  if (!db) {
+    if (!createTaskWithoutDb) return skip({ skipped: "no database" });
+    const outcome = createTaskWithoutDb(propertyId, title, dueAt, by);
+    if (outcome === "not_found") return skip({ skipped: "not found", property_id: propertyId });
+    if (outcome === "exists")
+      return skip({ skipped: "task already open", property_id: propertyId });
+    return {
+      ok: true,
+      eventType: "task.created",
+      detail: { property_id: propertyId, title, due_at: dueAt },
+    };
+  }
+  const { data: current, error: curErr } = await db
+    .from("properties")
+    .select("id")
+    .eq("id", propertyId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (curErr) throw new Error(`select properties: ${curErr.message}`);
+  if (!current) return skip({ skipped: "not found", property_id: propertyId });
+  // One open task per (rule, parcel): re-running the trigger must not pile up duplicates.
+  const { data: open, error: openErr } = await db
+    .from("activities")
+    .select("id")
+    .eq("property_id", propertyId)
+    .eq("kind", "task")
+    .eq("created_by", by)
+    .is("completed_at", null)
+    .limit(1);
+  if (openErr) throw new Error(`select activities: ${openErr.message}`);
+  if (open && open.length > 0) {
+    return skip({ skipped: "task already open", property_id: propertyId, activity_id: open[0].id });
+  }
+  const { data: task, error } = await db
+    .from("activities")
+    .insert({ property_id: propertyId, kind: "task", body: title, due_at: dueAt, created_by: by })
+    .select("id")
+    .single();
+  if (error) throw new Error(`insert activities: ${error.message}`);
+  return {
+    ok: true,
+    eventType: "task.created",
+    detail: { property_id: propertyId, title, due_at: dueAt, activity_id: task?.id },
+  };
 }

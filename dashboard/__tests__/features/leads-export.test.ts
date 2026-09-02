@@ -20,6 +20,9 @@ const lead = (over: Partial<PropertyLead>): PropertyLead => ({
   notes: null,
   neighborhood: "Oakwood",
   verification: "verified_vacant",
+  crm_stage: "verified",
+  priority: "normal",
+  tags: [],
   days_distressed: 94,
   latest_vacancy_confidence: 91,
   latest_lawn_growth_index: 0.62,
@@ -86,7 +89,11 @@ describe("leadsToCsv", () => {
     expect(lines[1]).toContain('"Unit ""B"", 12 Oak St"');
     expect(lines[1]).toContain("https://hawkeye.example.com/properties/m1");
     expect(lines[1].startsWith("042-115-008,")).toBe(true);
-    expect(lines[1]).toContain(",Oakwood,flagged,verified_vacant,94,91,0.62,false,");
+    // …verification, crm_stage, priority, assigned_to, owner_name, next_action,
+    // next_action_at, tags, days_distressed, confidence, lgi, vehicle…
+    expect(lines[1]).toContain(
+      ",Oakwood,flagged,verified_vacant,verified,normal,,,,,,94,91,0.62,false,",
+    );
     expect(csv.endsWith("\r\n")).toBe(true);
     // Header + 1 row + trailing newline.
     expect(lines).toHaveLength(3);
@@ -105,7 +112,7 @@ describe("leadsToCsv", () => {
       "http://localhost:3000",
     );
     const row = csv.split("\r\n")[1];
-    expect(row).toContain(",-80.8431,,flagged,,,91,");
+    expect(row).toContain(",-80.8431,,flagged,,verified,normal,,,,,,,91,");
   });
 });
 

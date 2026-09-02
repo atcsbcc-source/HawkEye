@@ -36,6 +36,22 @@ export interface Property {
   verified_at?: string | null;
   /** While set and in the future, the auto-flag trigger leaves a false positive alone. */
   snoozed_until?: string | null;
+  // ---- CRM / deal pipeline (20260904000000_crm.sql) ----
+  crm_stage?: CrmStage;
+  stage_changed_at?: string | null;
+  priority?: Priority;
+  /** Operator handling the deal (free text — the console has no user directory). */
+  assigned_to?: string | null;
+  owner_name?: string | null;
+  /** The one thing to do next on this parcel, and when it is due. */
+  next_action?: string | null;
+  next_action_at?: string | null;
+  asking_price?: number | null;
+  offer_price?: number | null;
+  /** After-repair value. */
+  arv?: number | null;
+  repair_estimate?: number | null;
+  tags?: string[];
 }
 
 export interface PropertyVerification {
@@ -112,6 +128,9 @@ export interface FactorScores {
 
 /** Row shape of the `distressed_properties` view + what the grid renders. */
 export interface PropertyLead extends Property {
+  crm_stage: CrmStage;
+  priority: Priority;
+  tags: string[];
   days_distressed: number | null;
   latest_vacancy_confidence: number | null;
   latest_lawn_growth_index: number | null;
@@ -121,3 +140,132 @@ export interface PropertyLead extends Property {
 
 /** Operator-confirmed threshold: leads distressed at least this long get pushed. */
 export { DISTRESS_THRESHOLD_DAYS } from "./constants";
+
+// ---------------------------------------------------------------------------
+// CRM
+// ---------------------------------------------------------------------------
+
+/** Deal pipeline stage — ordered; `closed_*` are terminal. */
+export type CrmStage =
+  | "new"
+  | "verified"
+  | "researching"
+  | "outreach"
+  | "negotiating"
+  | "under_contract"
+  | "closed_won"
+  | "closed_lost";
+
+export const CRM_STAGES: CrmStage[] = [
+  "new",
+  "verified",
+  "researching",
+  "outreach",
+  "negotiating",
+  "under_contract",
+  "closed_won",
+  "closed_lost",
+];
+
+export const STAGE_LABEL: Record<CrmStage, string> = {
+  new: "New",
+  verified: "Verified",
+  researching: "Researching",
+  outreach: "Outreach",
+  negotiating: "Negotiating",
+  under_contract: "Under contract",
+  closed_won: "Closed won",
+  closed_lost: "Closed lost",
+};
+
+export type Priority = "low" | "normal" | "high";
+export const PRIORITIES: Priority[] = ["low", "normal", "high"];
+
+export type ContactRole =
+  "owner" | "heir" | "tenant" | "relative" | "agent" | "attorney" | "neighbor" | "other";
+
+export const CONTACT_ROLES: ContactRole[] = [
+  "owner",
+  "heir",
+  "tenant",
+  "relative",
+  "agent",
+  "attorney",
+  "neighbor",
+  "other",
+];
+
+export const CONTACT_ROLE_LABEL: Record<ContactRole, string> = {
+  owner: "Owner",
+  heir: "Heir",
+  tenant: "Tenant",
+  relative: "Relative",
+  agent: "Agent",
+  attorney: "Attorney",
+  neighbor: "Neighbor",
+  other: "Other",
+};
+
+export type ContactChannel = "phone" | "text" | "email" | "mail";
+export const CONTACT_CHANNELS: ContactChannel[] = ["phone", "text", "email", "mail"];
+
+export interface Contact {
+  id: string;
+  property_id: string;
+  name: string;
+  role: ContactRole;
+  phone: string | null;
+  email: string | null;
+  mailing_address: string | null;
+  preferred_channel: ContactChannel | null;
+  do_not_contact: boolean;
+  /** Where the contact came from (county records, skip trace, neighbor…). */
+  source: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Timeline entry. `task` rows carry `due_at`; `completed_at` closes them. */
+export type ActivityKind =
+  "note" | "call" | "text" | "email" | "mailer" | "visit" | "offer" | "stage_change" | "task";
+
+/** Kinds an operator can log by hand (stage changes are system-written). */
+export const LOGGABLE_ACTIVITY_KINDS: ActivityKind[] = [
+  "note",
+  "call",
+  "text",
+  "email",
+  "mailer",
+  "visit",
+  "offer",
+  "task",
+];
+
+export const ACTIVITY_KIND_LABEL: Record<ActivityKind, string> = {
+  note: "Note",
+  call: "Call",
+  text: "Text",
+  email: "Email",
+  mailer: "Mailer",
+  visit: "Site visit",
+  offer: "Offer",
+  stage_change: "Stage change",
+  task: "Task",
+};
+
+export interface Activity {
+  id: string;
+  property_id: string;
+  contact_id: string | null;
+  kind: ActivityKind;
+  body: string;
+  /** Short result tag: "no answer", "left voicemail", "countered"… */
+  outcome: string | null;
+  /** Dollar amount for offers. */
+  amount: number | null;
+  due_at: string | null;
+  completed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+}

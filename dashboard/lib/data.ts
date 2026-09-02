@@ -18,6 +18,26 @@ import type {
 
 import { AUTO_FLAG_CONFIDENCE } from "./constants";
 
+/**
+ * Rows read before 20260904000000_crm.sql ran (or from the `properties`
+ * union below) may lack the CRM columns; give every lead the defaults so the
+ * grid and pipeline never see `undefined`. Numeric columns arrive as numbers
+ * from PostgREST but are coerced defensively.
+ */
+export function normalizeLead(row: Record<string, unknown>): PropertyLead {
+  const money = (v: unknown) => (v == null || v === "" ? null : Number(v));
+  return {
+    ...(row as unknown as PropertyLead),
+    crm_stage: (row.crm_stage as PropertyLead["crm_stage"]) ?? "new",
+    priority: (row.priority as PropertyLead["priority"]) ?? "normal",
+    tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+    asking_price: money(row.asking_price),
+    offer_price: money(row.offer_price),
+    arv: money(row.arv),
+    repair_estimate: money(row.repair_estimate),
+  };
+}
+
 /** All properties joined with their latest scan signals. Falls back to the
  *  in-process mock store when Supabase isn't configured (see .env.example). */
 export async function fetchLeads(): Promise<PropertyLead[]> {
@@ -30,15 +50,17 @@ export async function fetchLeads(): Promise<PropertyLead[]> {
     db.from("properties").select("*").is("first_flagged_at", null).is("archived_at", null),
   ]);
 
-  const activeLeads: PropertyLead[] = (active ?? []).map((p) => ({
-    ...p,
-    days_distressed: null,
-    latest_vacancy_confidence: null,
-    latest_lawn_growth_index: null,
-    latest_vehicle_present: null,
-    latest_scan_at: null,
-  }));
-  return [...((distressed ?? []) as PropertyLead[]), ...activeLeads];
+  const activeLeads: PropertyLead[] = (active ?? []).map((p) =>
+    normalizeLead({
+      ...p,
+      days_distressed: null,
+      latest_vacancy_confidence: null,
+      latest_lawn_growth_index: null,
+      latest_vehicle_present: null,
+      latest_scan_at: null,
+    }),
+  );
+  return [...(distressed ?? []).map((r) => normalizeLead(r)), ...activeLeads];
 }
 
 export async function fetchLead(id: string): Promise<PropertyLead | null> {

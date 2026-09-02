@@ -34,17 +34,24 @@ export interface Mission {
   completedAt: string | null;
 }
 
-export type TriggerType = "scan_processed" | "distress_threshold" | "mission_completed";
-export type ActionType = "flag_property" | "dispatch_webhook" | "notify";
+export type TriggerType =
+  | "scan_processed"
+  | "distress_threshold"
+  | "mission_completed"
+  | "verdict_recorded"
+  | "stage_changed";
+export type ActionType =
+  "flag_property" | "dispatch_webhook" | "notify" | "set_stage" | "create_task";
 
 export interface AutomationRule {
   id: string;
   name: string;
   triggerType: TriggerType;
-  /** scan_processed: {min_confidence}; distress_threshold: {min_days} */
+  /** scan_processed: {min_confidence}; distress_threshold: {min_days};
+   *  verdict_recorded: {verdict?}; stage_changed: {stage?} (blank = any). */
   triggerConfig: Record<string, unknown>;
   actionType: ActionType;
-  /** dispatch_webhook: {url} */
+  /** dispatch_webhook: {url}; set_stage: {stage}; create_task: {title, due_in_days} */
   actionConfig: Record<string, unknown>;
   enabled: boolean;
   lastFiredAt: string | null;
@@ -65,10 +72,14 @@ export const TRIGGER_LABELS: Record<TriggerType, string> = {
   scan_processed: "Scan processed",
   distress_threshold: "Distress threshold crossed",
   mission_completed: "Mission completed",
+  verdict_recorded: "Verdict recorded",
+  stage_changed: "Pipeline stage changed",
 };
 
 export const ACTION_LABELS: Record<ActionType, string> = {
   flag_property: "Flag property",
   dispatch_webhook: "Dispatch CRM webhook",
   notify: "Notify operators",
+  set_stage: "Move to pipeline stage",
+  create_task: "Create follow-up task",
 };

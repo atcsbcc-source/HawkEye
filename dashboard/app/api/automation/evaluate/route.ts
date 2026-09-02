@@ -54,6 +54,9 @@ export async function POST(req: NextRequest) {
     "days_distressed",
     "missionId",
     "name",
+    "verdict",
+    "stage",
+    "previous_stage",
   ] as const) {
     const v = (payload as Record<string, unknown>)[key];
     if (v !== undefined) projected[key] = v;

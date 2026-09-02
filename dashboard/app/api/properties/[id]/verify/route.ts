@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
 import { fetchVerifications } from "@/lib/data";
 import { mockRecordVerification, mockScans } from "@/lib/server/mock-store";
-import { pushEvent } from "@/lib/server/ops";
+import { evaluateRules, pushEvent } from "@/lib/server/ops";
 import { withAuth } from "@/lib/server/auth";
 import { Verify } from "@/lib/server/schemas";
 import { apiError, parseJson } from "@/lib/server/validate";
@@ -120,7 +120,9 @@ export const POST = withAuth<Params>(async (req, user, { params }) => {
     subjectId: params.id,
     detail: { verdict, scan_id: scanId, demoted: demote, note: note ? note.slice(0, 140) : null },
   });
-  return NextResponse.json({ verification, property });
+  // Workflow rules (verified vacant → pipeline stage + skip-trace task, …).
+  const automation = await evaluateRules("verdict_recorded", { property_id: params.id, verdict });
+  return NextResponse.json({ verification, property, automation });
 });
 
 /** GET /api/properties/[id]/verify — verification history. */

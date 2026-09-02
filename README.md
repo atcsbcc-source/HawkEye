@@ -249,13 +249,31 @@ npm run dev
   comparator, per-scan metrics, and a **Dispatch lead to CRM** action that
   POSTs to `CRM_WEBHOOK_URL` via `/api/dispatch` and marks the lead
   `dispatched`.
+- **Review** (`/review`) — keyboard-driven verification queue: every flagged
+  parcel with no verdict (or `needs_recheck`), highest confidence first, with
+  the comparator inline. `J`/`K` move, `V`/`F`/`O`/`R` record a verdict and
+  advance, `N` focuses the note. Verdicts use the same `POST …/verify` as the
+  detail page, so workflow rules fire.
+- **Pipeline** (`/pipeline`) — the built-in CRM. A kanban board of every parcel
+  by deal stage (`new → verified → researching → outreach → negotiating →
+  under_contract → closed_won | closed_lost`) with ‹ › stage moves, plus a
+  **Work queue** (`?view=queue`) of open tasks and next actions grouped
+  overdue / today / this week / later, with done and snooze (+1 d / +7 d).
+- **Deal, contacts and activity** — on the property page: a Deal card (stage
+  stepper, priority, assignee, owner of record, next action + due date,
+  ARV / repairs / asking / offer with the 70 % MAO and the room left vs the
+  offer, tags), a Contacts card (owner, heir, tenant, agent… with click-to-call,
+  text and email and a do-not-contact flag) and an Activity timeline (notes,
+  calls, texts, emails, mailers, site visits, offers with an amount, tasks with
+  a due date, plus system stage changes). Everything is audited.
 - **Operations** (`/operations`) — dark tactical map (Leaflet + Esri dark canvas, satellite toggle) of the
   AO with parcel status markers, live 1 Hz aircraft telemetry over SSE
   (battery/alt/speed/heading/sats/link), and a mission tasking queue:
   create a grid mission over the AO, launch, watch progress, abort/RTB.
 - **Automation** (`/automation`) — declarative trigger→condition→action
   rules (scan confidence ≥ N → flag property; distress ≥ N days → CRM
-  webhook; mission completed → notify) with enable toggles, fire counts,
+  webhook; mission completed → notify; verdict recorded → move to a pipeline
+  stage / open a follow-up task; stage changed → the same) with enable toggles, fire counts,
   and an append-only audit event stream fed by missions, rules, the
   pipeline, and Postgres triggers. Webhook deliveries are audited as
   `webhook.delivered` / `webhook.failed` with status and latency.
@@ -307,6 +325,28 @@ sign up* OFF; leaked-password protection ON; Site URL = deployed origin and
 Redirect URL `<origin>/auth/confirm`; Invite / Reset e-mail templates linking to
 `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}`.
 `dashboard/.env.example` lists every key.
+
+### CRM API (2026-09-04)
+
+All routes sit behind the session auth gate and the CSRF / rate-limit
+middleware like the rest of `/api`:
+
+| Route | Purpose |
+|---|---|
+| `POST /api/properties/[id]/stage` `{stage, note?}` | Move a parcel through the pipeline; writes a `stage_change` activity, audits `property.stage_changed`, fires `stage_changed` rules. |
+| `PATCH /api/properties/[id]` | Now also accepts `priority`, `assigned_to`, `owner_name`, `next_action`, `next_action_at`, `asking_price`, `offer_price`, `arv`, `repair_estimate`, `tags`. |
+| `GET/POST /api/properties/[id]/contacts`, `PATCH/DELETE …/contacts/[contactId]` | Contacts (name, role, phone, email, mailing address, preferred channel, do-not-contact, source, notes). |
+| `GET/POST /api/properties/[id]/activities`, `PATCH …/activities/[activityId]` | Timeline entries and tasks (`kind: "task"` + `due_at`; `PATCH {completed: true}` closes one). |
+| `GET /api/leads/export` | CSV / GeoJSON now carry `crm_stage`, `priority`, `assigned_to`, `owner_name`, `next_action`, `next_action_at`, `tags`. |
+
+Schema: `supabase/migrations/20260904000000_crm.sql` (`properties` pipeline
+columns, `contacts`, `activities`, the widened `automation_rules` check
+constraints and two seeded workflow rules — ids `…0003` / `…0004`, matching
+`DEFAULT_RULE_IDS` in `dashboard/lib/server/rules.ts`).
+
+Default workflow: recording **Verified vacant** moves the parcel to the
+`verified` stage and opens a "Skip-trace the owner" task due in 3 days. Both
+are ordinary rules on `/automation` — disable or replace them there.
 
 ### Features added 2026-09
 
@@ -396,10 +436,12 @@ mypy --config-file pipeline/pyproject.toml pipeline
 
 - Dashboard unit tests: vitest, `dashboard/__tests__/**/*.test.ts` mirroring
   `lib/` (rule evaluation, action execution with fake deps, simulator route
-  generation and a deterministic flight, audit store), plus `__tests__/security`
-  (SSRF table, rate limiter, schemas), `__tests__/ui` (formatting, status maps,
-  nav) and `__tests__/features` (grid planner, WPML, import parsers, lead
-  export). No network.
+  generation and a deterministic flight, audit store, the CRM mock store and
+  the workflow rules), `__tests__/lib/crm.test.ts` (stage order, due buckets,
+  work queue, MAO), plus `__tests__/security` (SSRF table, rate limiter,
+  schemas), `__tests__/ui` (formatting, status maps, nav) and
+  `__tests__/features` (grid planner, WPML, import parsers, lead export). No
+  network.
 - Production smoke test in mock mode: `npm run build && HAWKEYE_ALLOW_DEV_MODE=1 npm start`
   (a production server refuses to boot without Supabase otherwise).
 - Pipeline tests: pytest, `pipeline/tests/` on synthetic scenes and a

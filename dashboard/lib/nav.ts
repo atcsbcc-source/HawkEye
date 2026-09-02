@@ -1,4 +1,12 @@
-import { LayoutDashboard, Plane, Radar, Workflow, type LucideIcon } from "lucide-react";
+import {
+  ClipboardCheck,
+  LayoutDashboard,
+  Plane,
+  Radar,
+  SquareKanban,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -13,6 +21,8 @@ export interface NavItem {
  */
 export const NAV: readonly NavItem[] = [
   { href: "/", label: "Command Center", icon: LayoutDashboard },
+  { href: "/review", label: "Review", icon: ClipboardCheck },
+  { href: "/pipeline", label: "Pipeline", icon: SquareKanban },
   { href: "/operations", label: "Operations", icon: Radar },
   { href: "/automation", label: "Automation", icon: Workflow },
   { href: "/flights", label: "Flights", icon: Plane },

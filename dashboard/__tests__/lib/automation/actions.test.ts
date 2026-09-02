@@ -148,3 +148,80 @@ describe("executeAction / notify", () => {
     expect(result).toEqual({ ok: true, detail: {} });
   });
 });
+
+describe("executeAction / set_stage + create_task (mock deps)", () => {
+  const base = { db: null, postJson: async () => ({ status: 200 }) };
+
+  it("set_stage moves the parcel and reports unchanged / not found as skips", async () => {
+    const calls: [string, string, string][] = [];
+    const deps: ActionDeps = {
+      ...base,
+      setStageWithoutDb: (id, stage, by) => {
+        calls.push([id, stage, by]);
+        return id === "p1" ? "changed" : id === "p2" ? "unchanged" : "not_found";
+      },
+    };
+    const r = rule({ id: "rs", actionType: "set_stage", actionConfig: { stage: "verified" } });
+    expect(await executeAction(r, { property_id: "p1" }, deps)).toMatchObject({
+      ok: true,
+      eventType: "property.stage_changed",
+      detail: { property_id: "p1", stage: "verified" },
+    });
+    expect(calls).toEqual([["p1", "verified", "rule:rs"]]);
+    expect(await executeAction(r, { property_id: "p2" }, deps)).toMatchObject({
+      ok: true,
+      skipped: true,
+    });
+    expect(await executeAction(r, { property_id: "p3" }, deps)).toMatchObject({
+      ok: true,
+      skipped: true,
+    });
+    expect(await executeAction(r, {}, deps)).toMatchObject({ skipped: true });
+  });
+
+  it("set_stage rejects an unknown stage and needs a mock setter without a db", async () => {
+    const bad = rule({ actionType: "set_stage", actionConfig: { stage: "sold" } });
+    expect(await executeAction(bad, { property_id: "p1" }, base)).toMatchObject({ ok: false });
+    const ok = rule({ actionType: "set_stage", actionConfig: { stage: "outreach" } });
+    expect(await executeAction(ok, { property_id: "p1" }, base)).toMatchObject({ skipped: true });
+  });
+
+  it("create_task opens a task due in due_in_days (default 3)", async () => {
+    const created: { id: string; title: string; dueAt: string; by: string }[] = [];
+    const deps: ActionDeps = {
+      ...base,
+      createTaskWithoutDb: (id, title, dueAt, by) => {
+        created.push({ id, title, dueAt, by });
+        return id === "ghost" ? "not_found" : id === "dup" ? "exists" : "created";
+      },
+    };
+    const r = rule({
+      id: "rt",
+      actionType: "create_task",
+      actionConfig: { title: "Skip-trace", due_in_days: 5 },
+    });
+    const before = Date.now();
+    const res = await executeAction(r, { property_id: "p1" }, deps);
+    expect(res).toMatchObject({
+      ok: true,
+      eventType: "task.created",
+      detail: { title: "Skip-trace" },
+    });
+    const due = Date.parse(created[0].dueAt);
+    expect(due - before).toBeGreaterThanOrEqual(5 * 86_400_000 - 1000);
+    expect(due - before).toBeLessThan(5 * 86_400_000 + 5000);
+    expect(created[0].by).toBe("rule:rt");
+
+    const dflt = rule({ actionType: "create_task", actionConfig: { title: "Call" } });
+    await executeAction(dflt, { property_id: "p1" }, deps);
+    expect(Date.parse(created[1].dueAt) - before).toBeGreaterThanOrEqual(3 * 86_400_000 - 1000);
+
+    expect(await executeAction(r, { property_id: "ghost" }, deps)).toMatchObject({ skipped: true });
+    expect(await executeAction(r, { property_id: "dup" }, deps)).toMatchObject({
+      skipped: true,
+      detail: { skipped: "task already open" },
+    });
+    const untitled = rule({ actionType: "create_task", actionConfig: {} });
+    expect(await executeAction(untitled, { property_id: "p1" }, deps)).toMatchObject({ ok: false });
+  });
+});

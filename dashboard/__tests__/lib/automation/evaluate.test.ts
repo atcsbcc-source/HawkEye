@@ -39,6 +39,27 @@ describe("conditionMet", () => {
     expect(conditionMet(r, { anything: "at all" })).toBe(true);
   });
 
+  it("verdict_recorded matches the configured verdict, or any when blank", () => {
+    const only = rule({
+      triggerType: "verdict_recorded",
+      triggerConfig: { verdict: "verified_vacant" },
+    });
+    expect(conditionMet(only, { verdict: "verified_vacant" })).toBe(true);
+    expect(conditionMet(only, { verdict: "occupied" })).toBe(false);
+    expect(conditionMet(only, {})).toBe(false);
+    const any = rule({ triggerType: "verdict_recorded", triggerConfig: {} });
+    expect(conditionMet(any, { verdict: "occupied" })).toBe(true);
+    expect(conditionMet(any, {})).toBe(true);
+  });
+
+  it("stage_changed matches the stage entered, or any when blank", () => {
+    const only = rule({ triggerType: "stage_changed", triggerConfig: { stage: "under_contract" } });
+    expect(conditionMet(only, { stage: "under_contract" })).toBe(true);
+    expect(conditionMet(only, { stage: "outreach" })).toBe(false);
+    expect(conditionMet(only, { stage: 42 })).toBe(false);
+    expect(conditionMet(rule({ triggerType: "stage_changed" }), { stage: "outreach" })).toBe(true);
+  });
+
   it("missing config falls back to the shared constants", () => {
     const scan = rule({ triggerType: "scan_processed", triggerConfig: {} });
     expect(conditionMet(scan, { vacancy_confidence: AUTO_FLAG_CONFIDENCE - 1 })).toBe(false);

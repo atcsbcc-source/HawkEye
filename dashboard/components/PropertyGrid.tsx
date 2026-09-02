@@ -5,18 +5,25 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { ArrowUpDown, Car, Filter, Search, Sprout, X } from "lucide-react";
-import { DISTRESS_THRESHOLD_DAYS, type LeadStatus, type PropertyLead } from "@/lib/types";
+import {
+  CRM_STAGES,
+  DISTRESS_THRESHOLD_DAYS,
+  STAGE_LABEL,
+  type CrmStage,
+  type LeadStatus,
+  type PropertyLead,
+} from "@/lib/types";
 import { AUTO_FLAG_CONFIDENCE } from "@/lib/constants";
 import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/format";
 import { useNow } from "@/lib/ui/useNow";
-import { LEAD_STATUS } from "@/lib/ui/status";
+import { CRM_STAGE, LEAD_STATUS } from "@/lib/ui/status";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { ConfidenceBar } from "./ConfidenceBar";
 
 const STATUS_FILTERS = ["all", "active", "flagged", "dispatched"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
-type SortKey = "address" | "status" | "days" | "confidence" | "lgi" | "last_scan";
+type SortKey = "address" | "status" | "stage" | "days" | "confidence" | "lgi" | "last_scan";
 type SortDir = "asc" | "desc";
 
 const LGI_SIGNAL = 0.1;
@@ -25,6 +32,7 @@ const STALE_SCAN_MS = 14 * 86_400_000;
 const COLUMNS: { key: SortKey; label: string; className?: string; numeric?: boolean }[] = [
   { key: "address", label: "Property" },
   { key: "status", label: "Status" },
+  { key: "stage", label: "Stage", className: "hidden lg:table-cell" },
   { key: "days", label: "Days distressed", className: "hidden sm:table-cell", numeric: true },
   { key: "confidence", label: "Vacancy confidence", numeric: true },
   { key: "lgi", label: "Signals", className: "hidden md:table-cell" },
@@ -33,6 +41,10 @@ const COLUMNS: { key: SortKey; label: string; className?: string; numeric?: bool
 
 function parseStatus(v: string | null): StatusFilter {
   return (STATUS_FILTERS as readonly string[]).includes(v ?? "") ? (v as StatusFilter) : "all";
+}
+
+function parseStage(v: string | null): CrmStage | "all" {
+  return (CRM_STAGES as readonly string[]).includes(v ?? "") ? (v as CrmStage) : "all";
 }
 
 const DEFAULT_SORT: { key: SortKey; dir: SortDir } = { key: "confidence", dir: "desc" };
@@ -54,6 +66,8 @@ function compare(a: PropertyLead, b: PropertyLead, key: SortKey): number {
       return a.address.localeCompare(b.address);
     case "status":
       return LEAD_STATUS[a.status].label.localeCompare(LEAD_STATUS[b.status].label);
+    case "stage":
+      return CRM_STAGES.indexOf(a.crm_stage) - CRM_STAGES.indexOf(b.crm_stage);
     case "days":
       return num(a.days_distressed) - num(b.days_distressed);
     case "confidence":
@@ -80,14 +94,22 @@ export function PropertyGrid({
   // URL is the source of truth for status/over/sort; the search box is local
   // and syncs to the URL (debounced, without a server round-trip).
   const status = parseStatus(sp.get("status"));
+  const stage = parseStage(sp.get("stage"));
   const over = sp.get("over") === "1";
   const { key: sortKey, dir: sortDir } = parseSort(sp.get("sort"), sp.get("dir"));
   const [query, setQuery] = useState(sp.get("q") ?? "");
 
   const buildUrl = useCallback(
-    (s: StatusFilter, o: boolean, q: string, sort = { key: sortKey, dir: sortDir }) => {
+    (
+      s: StatusFilter,
+      o: boolean,
+      q: string,
+      sort = { key: sortKey, dir: sortDir },
+      st: CrmStage | "all" = stage,
+    ) => {
       const p = new URLSearchParams();
       if (s !== "all") p.set("status", s);
+      if (st !== "all") p.set("stage", st);
       if (o) p.set("over", "1");
       if (q.trim()) p.set("q", q.trim());
       if (sort.key !== DEFAULT_SORT.key || sort.dir !== DEFAULT_SORT.dir) {
@@ -97,15 +119,17 @@ export function PropertyGrid({
       const qs = p.toString();
       return qs ? `${pathname}?${qs}` : pathname;
     },
-    [pathname, sortKey, sortDir],
+    [pathname, sortKey, sortDir, stage],
   );
 
   const setStatus = (s: StatusFilter) =>
     router.replace(buildUrl(s, over, query), { scroll: false });
+  const setStage = (st: CrmStage | "all") =>
+    router.replace(buildUrl(status, over, query, undefined, st), { scroll: false });
   const setOver = (o: boolean) => router.replace(buildUrl(status, o, query), { scroll: false });
   const clearFilters = () => {
     setQuery("");
-    router.replace(buildUrl("all", false, "", DEFAULT_SORT), { scroll: false });
+    router.replace(buildUrl("all", false, "", DEFAULT_SORT, "all"), { scroll: false });
   };
 
   useEffect(() => {
@@ -117,12 +141,13 @@ export function PropertyGrid({
     return () => clearTimeout(t);
   }, [query, status, over, sp, buildUrl]);
 
-  const filtersActive = status !== "all" || over || query.trim().length > 0;
+  const filtersActive = status !== "all" || stage !== "all" || over || query.trim().length > 0;
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = leads
       .filter((l) => status === "all" || l.status === status)
+      .filter((l) => stage === "all" || l.crm_stage === stage)
       .filter((l) => !over || (l.days_distressed ?? 0) >= DISTRESS_THRESHOLD_DAYS)
       .filter(
         (l) => !q || l.address.toLowerCase().includes(q) || l.parcel_id.toLowerCase().includes(q),
@@ -135,7 +160,7 @@ export function PropertyGrid({
       const c = compare(b, a, "confidence");
       return c !== 0 ? c : compare(b, a, "days");
     });
-  }, [leads, query, status, over, sortKey, sortDir]);
+  }, [leads, query, status, stage, over, sortKey, sortDir]);
 
   // Sort lives in the URL (?sort=&dir=) so a reload or a shared link keeps it.
   function toggleSort(key: SortKey) {
@@ -188,6 +213,20 @@ export function PropertyGrid({
             </button>
           ))}
         </div>
+
+        <select
+          className="input h-9 w-auto text-xs"
+          aria-label="Pipeline stage"
+          value={stage}
+          onChange={(e) => setStage(e.target.value as CrmStage | "all")}
+        >
+          <option value="all">Any stage</option>
+          {CRM_STAGES.map((st) => (
+            <option key={st} value={st}>
+              {STAGE_LABEL[st]}
+            </option>
+          ))}
+        </select>
 
         <button
           type="button"
@@ -279,6 +318,17 @@ export function PropertyGrid({
                   </td>
                   <td className="px-3 py-2.5">
                     <StatusBadge status={LEAD_STATUS[l.status]} />
+                  </td>
+                  <td className="hidden px-3 py-2.5 lg:table-cell">
+                    <StatusBadge status={CRM_STAGE[l.crm_stage]} dot={false} />
+                    {l.next_action && (
+                      <p
+                        className="mt-0.5 max-w-[14rem] truncate text-[11px] text-slate-400"
+                        title={l.next_action}
+                      >
+                        → {l.next_action}
+                      </p>
+                    )}
                   </td>
                   <td className="hidden px-3 py-2.5 font-mono tabular-nums sm:table-cell">
                     {l.days_distressed === null ? (
