@@ -10,6 +10,10 @@ CRM dispatch.
 
 ## Quickstart
 
+Flying for the first time? Follow [`docs/FIRST_FLIGHT.md`](docs/FIRST_FLIGHT.md)
+(pre-flight checklist, loading the mission into DJI Fly, capture settings, the
+post-flight commands).
+
 ```bash
 make install && make dev        # http://localhost:3000 in mock mode — no Supabase needed
 cp dashboard/.env.example dashboard/.env.local   # then fill it in -> Supabase mode
@@ -134,6 +138,10 @@ python run_pipeline.py --flight-code FLT-2026-W35-OAKWOOD --data-dir data/ [--gs
 
 `--gsd-cm` is the fallback ground sampling distance when the flight row has no
 `gsd_cm_per_px`; `/flights/<id>` prints the exact command for each sortie.
+`--dry-run` analyses and scores every pair offline — no Supabase reads or
+writes, no uploads — and prints one line per parcel; `python preflight.py
+[--flight-code ...]` (or `make preflight FLIGHT=...`) checks deps, env, model,
+Supabase reachability, the storage bucket, the flight row and staged crops.
 
 The runner looks every parcel up in one query, skips unknown parcels and
 missing pairs, keeps going past a failed parcel, and prints a summary
@@ -296,13 +304,11 @@ Redirect URL `<origin>/auth/confirm`; Invite / Reset e-mail templates linking to
 - **Mission export (KMZ/KML)** — on `/operations` click the download icon on a
   mission: **KMZ** is DJI WPML (`wpmz/template.kml` + `wpmz/waylines.wpml`,
   90 m AGL, 75 / 65 % overlap, Mavic 3 Classic camera model, optional
-  `?altitude=&front=&side=`), **KML** opens in Google Earth. Import in **DJI
-  Pilot 2** (RC Pro): copy the `.kmz` to the RC's
-  `DJI/com.dji.industry.pilot/waypoint/` folder or use *Flight Route → Import*.
-  The consumer **DJI Fly** app does not import WPML directly — open the KML in
-  Google Earth / a third-party waypoint app and fly the same serpentine.
-- **Lead export** — `Export CSV` on the command center, or
-  `/api/leads/export?format=csv|geojson&status=&neighborhood=&minDays=`.
+  `?altitude=&front=&side=`), **KML** opens in Google Earth. **DJI Pilot 2**
+  (Enterprise): *Flight Route → Import*. **DJI Fly** (Mavic 3 Classic, Mini,
+  Air): its waypoint missions are WPML KMZ files too — copy the HawkEye KMZ over
+  a saved mission's `<GUID>.kmz` in the RC's `waypoint/` folder; step-by-step in
+  [`docs/FIRST_FLIGHT.md`](docs/FIRST_FLIGHT.md).
 
 New migration `20260903020000_properties_verifications_firings.sql` adds the
 verification / snooze / archive columns, `property_verifications`,

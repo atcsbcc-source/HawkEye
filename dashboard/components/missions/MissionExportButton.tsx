@@ -21,7 +21,7 @@ export function MissionExportButton({ missionId }: { missionId: string }) {
     <div ref={ref} className="relative">
       <button
         type="button"
-        title="Export flight plan"
+        title="Export flight plan — KMZ loads into DJI Pilot 2 or DJI Fly (see docs/FIRST_FLIGHT.md)"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}

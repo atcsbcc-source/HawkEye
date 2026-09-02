@@ -2,13 +2,15 @@
 #   make install   npm ci + pip install -e pipeline[dev]
 #   make dev       Next.js dev server (mock mode unless dashboard/.env.local exists)
 #   make check     lint + typecheck + test for dashboard and pipeline (run before finishing)
+#   make preflight FLIGHT=FLT-2026-W36-OAKWOOD   readiness check before processing a sortie
+#   make dry-run   FLIGHT=...                    score staged crops offline, write nothing
 
 DASH := dashboard
 PIPE := pipeline
 NPM  := npm --prefix $(DASH)
 PY   ?= python
 
-.PHONY: install dev build lint fmt typecheck test check clean
+.PHONY: install dev build lint fmt typecheck test check clean preflight dry-run
 
 install:
 	cd $(DASH) && npm ci
@@ -39,6 +41,12 @@ test:
 	$(PY) -m pytest -q $(PIPE)/tests
 
 check: lint typecheck test
+
+preflight:
+	cd $(PIPE) && $(PY) preflight.py $(if $(FLIGHT),--flight-code $(FLIGHT),) --data-dir $(or $(DATA),data)
+
+dry-run:
+	cd $(PIPE) && $(PY) run_pipeline.py --flight-code $(FLIGHT) --data-dir $(or $(DATA),data) --dry-run
 
 clean:
 	rm -rf $(DASH)/.next $(DASH)/coverage $(DASH)/*.tsbuildinfo

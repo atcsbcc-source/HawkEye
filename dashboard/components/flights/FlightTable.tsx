@@ -73,7 +73,8 @@ export function FlightTable({ flights }: { flights: FlightSummary[] }) {
             {flights.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
-                  No flights yet. Create one before running the pipeline.
+                  No flights yet. Create one before running the pipeline — and see
+                  docs/FIRST_FLIGHT.md for the sortie checklist.
                 </td>
               </tr>
             )}

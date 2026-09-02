@@ -23,7 +23,7 @@ dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
 # Flat module layout on purpose: the README commands (`python crop_parcels.py ...`)
 # stay valid and `import change_detector` keeps working from this directory.
 [tool.setuptools]
-py-modules = ["change_detector", "crop_parcels", "run_pipeline", "settings"]
+py-modules = ["change_detector", "crop_parcels", "run_pipeline", "settings", "preflight"]
 packages = ["intel"]
 
 [tool.setuptools.package-data]

@@ -20,6 +20,8 @@ Expected input layout (produced by crop_parcels.py after each flight):
 
 Usage:
   python run_pipeline.py --flight-code FLT-2026-W35-OAKWOOD --data-dir data/
+  python run_pipeline.py --flight-code FLT-2026-W35-OAKWOOD --data-dir data/ --dry-run
+      # offline: analyse + score every pair and print the results, touch nothing
 
 Model: HAWKEYE_MODEL_PATH, else intel/model.json (from `python -m intel.train`),
 else the expert prior in intel/prior.json.
@@ -121,23 +123,34 @@ def fetch_history(
 
 
 def process_flight(
-    db: Client,
+    db: Client | None,
     flight_code: str,
     data_dir: Path,
     gsd_cm: float,
     model: VacancyModel | None = None,
+    *,
+    dry_run: bool = False,
 ) -> RunSummary:
+    """Analyse, score and persist one flight. With `dry_run` nothing is read
+    from or written to Supabase: every parcel directory is treated as known,
+    history is empty, and results are only logged — the way to validate a
+    first set of crops before credentials exist."""
+    if db is None and not dry_run:
+        raise ValueError("a Supabase client is required unless dry_run=True")
     model = model or load_model_for_run()
-    flight = (
-        db.table("flights")
-        .select("id, gsd_cm_per_px")
-        .eq("flight_code", flight_code)
-        .maybe_single()
-        .execute()
-    )
-    if flight is None or not flight.data:
-        raise SystemExit(f"flight {flight_code!r} not found in `flights` (exit 2)")
-    flight_row = flight.data
+    if dry_run or db is None:
+        flight_row: dict[str, Any] = {"id": "dry-run", "gsd_cm_per_px": None}
+    else:
+        flight = (
+            db.table("flights")
+            .select("id, gsd_cm_per_px")
+            .eq("flight_code", flight_code)
+            .maybe_single()
+            .execute()
+        )
+        if flight is None or not flight.data:
+            raise SystemExit(f"flight {flight_code!r} not found in `flights` (exit 2)")
+        flight_row = flight.data
     gsd = float(flight_row.get("gsd_cm_per_px") or gsd_cm)
 
     flight_dir = data_dir / flight_code
@@ -152,7 +165,9 @@ def process_flight(
     # One lookup for every parcel id up front; unknown ids are skipped, not fatal.
     parcel_ids = [p.name for p in parcels]
     known: dict[str, str] = {}
-    if parcel_ids:
+    if dry_run or db is None:
+        known = {pid: pid for pid in parcel_ids}
+    elif parcel_ids:
         rows = (
             db.table("properties").select("id, parcel_id").in_("parcel_id", parcel_ids).execute()
         ).data or []
@@ -183,11 +198,26 @@ def process_flight(
 
     # Pass 2 — score against history + the rest of the flight, then persist.
     grid = grid_context([a.result for a in analyzed])
-    history = fetch_history(db, [a.property_id for a in analyzed], flight_row["id"])
+    history: dict[str, list[dict[str, Any]]] = {}
+    if not dry_run and db is not None:
+        history = fetch_history(db, [a.property_id for a in analyzed], flight_row["id"])
     for a in analyzed:
         a.history = history.get(a.property_id, [])
         score = model.score(build_factors(a.result, a.history, grid))
         a.result.vacancy_confidence = score.confidence
+        if dry_run or db is None:
+            summary.processed += 1
+            log.info(
+                "  - %-16s confidence=%3d  lgi=%+.2f  change=%4.1f%%  vehicle=%-7s  align=%.2f  %s",
+                a.parcel_id,
+                score.confidence,
+                a.result.lawn_growth_index,
+                a.result.change_score,
+                "static" if a.result.vehicle_static else str(a.result.vehicle_present).lower(),
+                a.result.alignment_quality,
+                " · ".join(score.top_drivers) or "no drivers",
+            )
+            continue
         try:
             base = f"{a.parcel_id}/{flight_code}"
             url_curr = upload_crop(db, a.curr, f"{base}/current.jpg")
@@ -235,7 +265,10 @@ def process_flight(
             }
         )
 
-    log.info("[%s] done: %s", flight_code, summary)
+    if dry_run or db is None:
+        log.info("[%s] DRY RUN — nothing uploaded or written: %s", flight_code, summary)
+    else:
+        log.info("[%s] done: %s", flight_code, summary)
     return summary
 
 
@@ -290,11 +323,17 @@ def main() -> int:
     ap.add_argument(
         "--gsd-cm", type=float, default=2.5, help="Fallback GSD if the flight row has none"
     )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Analyse and score offline; no Supabase reads or writes, no uploads",
+    )
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
     configure_logging(args.verbose)
 
-    summary = process_flight(get_client(), args.flight_code, args.data_dir, args.gsd_cm)
+    db = None if args.dry_run else get_client()
+    summary = process_flight(db, args.flight_code, args.data_dir, args.gsd_cm, dry_run=args.dry_run)
     return 1 if summary.failed else 0
 
 
