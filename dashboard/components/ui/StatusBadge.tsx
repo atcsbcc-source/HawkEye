@@ -27,7 +27,7 @@ export function StatusBadge({
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border font-medium",
         size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-sm",
         status.badge,
-        className
+        className,
       )}
     >
       {dot && (
@@ -36,7 +36,7 @@ export function StatusBadge({
           className={clsx(
             "h-1.5 w-1.5 rounded-full",
             status.dot,
-            pulse && "motion-safe:animate-pulse"
+            pulse && "motion-safe:animate-pulse",
           )}
         />
       )}

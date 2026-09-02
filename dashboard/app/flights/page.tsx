@@ -17,14 +17,15 @@ export default async function FlightsPage() {
         <div>
           <h2 className="text-2xl font-semibold text-white">Flights</h2>
           <p className="mt-1 text-sm text-slate-400">
-            One row per weekly sortie. Create the flight here first — <code className="text-slate-300">run_pipeline.py</code>{" "}
-            looks the code up before it writes any scans.
+            One row per weekly sortie. Create the flight here first —{" "}
+            <code className="text-slate-300">run_pipeline.py</code> looks the code up before it
+            writes any scans.
           </p>
         </div>
         <p className="text-xs text-slate-400">
-          <span className="text-slate-100 tabular-nums">{flights.length}</span> flights ·{" "}
-          <span className="text-slate-100 tabular-nums">{totalScans}</span> scans ·{" "}
-          <span className="text-amber-300 tabular-nums">{totalFlagged}</span> newly flagged
+          <span className="tabular-nums text-slate-100">{flights.length}</span> flights ·{" "}
+          <span className="tabular-nums text-slate-100">{totalScans}</span> scans ·{" "}
+          <span className="tabular-nums text-amber-300">{totalFlagged}</span> newly flagged
         </p>
       </div>
 

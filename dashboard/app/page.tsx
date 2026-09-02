@@ -15,9 +15,7 @@ export default async function CommandCenter() {
   const source = process.env.NEXT_PUBLIC_SUPABASE_URL ? "supabase" : "mock";
 
   const flagged = leads.filter((l) => l.status === "flagged");
-  const overThreshold = flagged.filter(
-    (l) => (l.days_distressed ?? 0) >= DISTRESS_THRESHOLD_DAYS
-  );
+  const overThreshold = flagged.filter((l) => (l.days_distressed ?? 0) >= DISTRESS_THRESHOLD_DAYS);
   const dispatched = leads.filter((l) => l.status === "dispatched");
   const scanned = leads.filter((l) => l.latest_scan_at !== null).length;
 

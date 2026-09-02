@@ -4,7 +4,14 @@ import { getSupabase } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-const OTP_TYPES = new Set<EmailOtpType>(["invite", "recovery", "email", "magiclink", "signup", "email_change"]);
+const OTP_TYPES = new Set<EmailOtpType>([
+  "invite",
+  "recovery",
+  "email",
+  "magiclink",
+  "signup",
+  "email_change",
+]);
 
 /**
  * GET /auth/confirm?token_hash=...&type=invite|recovery

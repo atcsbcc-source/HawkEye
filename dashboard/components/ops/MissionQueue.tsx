@@ -170,22 +170,14 @@ export function MissionQueue({
           })}
           {hidden > 0 && (
             <li>
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="btn-ghost w-full"
-              >
+              <button type="button" onClick={() => setExpanded(true)} className="btn-ghost w-full">
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden /> +{hidden} more
               </button>
             </li>
           )}
           {expanded && list.length > VISIBLE && (
             <li>
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                className="btn-ghost w-full"
-              >
+              <button type="button" onClick={() => setExpanded(false)} className="btn-ghost w-full">
                 <ChevronDown className="h-3.5 w-3.5 rotate-180" aria-hidden /> Show fewer
               </button>
             </li>

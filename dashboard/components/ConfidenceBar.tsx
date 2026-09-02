@@ -40,7 +40,7 @@ export function ConfidenceBar({
         aria-valuetext={`${v} of 100${v >= FLAG_THRESHOLD ? ", above auto-flag threshold" : ""}`}
         className={clsx(
           "relative overflow-hidden rounded-full bg-slate-700",
-          size === "sm" ? "h-1.5 w-20" : "h-2 w-full"
+          size === "sm" ? "h-1.5 w-20" : "h-2 w-full",
         )}
       >
         <div className={clsx("h-full", tone)} style={{ width: `${v}%` }} />
@@ -55,7 +55,7 @@ export function ConfidenceBar({
         <span
           className={clsx(
             "shrink-0 text-right font-mono tabular-nums",
-            size === "sm" ? "w-7 text-xs text-slate-300" : "text-sm text-white"
+            size === "sm" ? "w-7 text-xs text-slate-300" : "text-sm text-white",
           )}
         >
           {Math.round(v)}

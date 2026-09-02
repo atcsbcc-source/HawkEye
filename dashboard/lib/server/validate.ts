@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import type { z } from "zod";
 
 /** JSON error response helper. */
-export function apiError(message: string, status = 400, extra?: Record<string, unknown>): NextResponse {
+export function apiError(
+  message: string,
+  status = 400,
+  extra?: Record<string, unknown>,
+): NextResponse {
   return NextResponse.json({ error: message, ...extra }, { status });
 }
 
@@ -17,7 +21,7 @@ export type ParseResult<T> = { ok: true; data: T } | { ok: false; res: NextRespo
 export async function parseJson<S extends z.ZodType>(
   req: Request,
   schema: S,
-  opts: { maxBytes?: number } = {}
+  opts: { maxBytes?: number } = {},
 ): Promise<ParseResult<z.output<S>>> {
   const maxBytes = opts.maxBytes ?? 16_384;
 
@@ -90,10 +94,7 @@ async function readCapped(req: Request, maxBytes: number): Promise<string> {
 }
 
 /** Validate URL search params against a schema (400 on failure). */
-export function parseQuery<S extends z.ZodType>(
-  req: Request,
-  schema: S
-): ParseResult<z.output<S>> {
+export function parseQuery<S extends z.ZodType>(req: Request, schema: S): ParseResult<z.output<S>> {
   const sp = new URL(req.url).searchParams;
   const obj: Record<string, string> = {};
   sp.forEach((v, k) => {

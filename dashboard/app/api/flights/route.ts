@@ -16,7 +16,11 @@ const CreateFlightSchema = z.object({
     .max(64)
     .regex(/^[A-Za-z0-9._-]+$/, "letters, digits, . _ - only")
     .optional(),
-  flown_at: z.string().trim().min(1).refine((s) => !Number.isNaN(new Date(s).getTime()), "flown_at must be a date"),
+  flown_at: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((s) => !Number.isNaN(new Date(s).getTime()), "flown_at must be a date"),
   neighborhood: z.string().trim().min(1).max(80),
   drone_model: z.string().trim().min(1).max(80).optional(),
   altitude_m: z.coerce.number().min(5).max(500).nullish(),
@@ -39,7 +43,9 @@ export async function POST(req: Request) {
   }
   const parsed = CreateFlightSchema.safeParse(body);
   if (!parsed.success) {
-    const error = parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
+    const error = parsed.error.issues
+      .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+      .join("; ");
     return NextResponse.json({ error }, { status: 400 });
   }
   const d = parsed.data;
@@ -57,23 +63,37 @@ export async function POST(req: Request) {
   const db = getServiceSupabase();
   let flight: unknown;
   if (db) {
-    const { data: dup } = await db.from("flights").select("id").eq("flight_code", row.flight_code).maybeSingle();
+    const { data: dup } = await db
+      .from("flights")
+      .select("id")
+      .eq("flight_code", row.flight_code)
+      .maybeSingle();
     if (dup) {
-      return NextResponse.json({ error: `Flight ${row.flight_code} already exists`, id: dup.id }, { status: 409 });
+      return NextResponse.json(
+        { error: `Flight ${row.flight_code} already exists`, id: dup.id },
+        { status: 409 },
+      );
     }
     const { data, error } = await db.from("flights").insert(row).select().single();
     if (error || !data) {
       const isDup = error?.code === "23505";
       return NextResponse.json(
-        { error: isDup ? `Flight ${row.flight_code} already exists` : error?.message ?? "Insert failed" },
-        { status: isDup ? 409 : 500 }
+        {
+          error: isDup
+            ? `Flight ${row.flight_code} already exists`
+            : (error?.message ?? "Insert failed"),
+        },
+        { status: isDup ? 409 : 500 },
       );
     }
     flight = data;
   } else {
     const created = mockCreateFlight(row);
     if (created === "duplicate") {
-      return NextResponse.json({ error: `Flight ${row.flight_code} already exists` }, { status: 409 });
+      return NextResponse.json(
+        { error: `Flight ${row.flight_code} already exists` },
+        { status: 409 },
+      );
     }
     flight = created;
   }
@@ -83,7 +103,11 @@ export async function POST(req: Request) {
     eventType: "flight.created",
     subjectType: "flight",
     subjectId: String((flight as { id: string }).id),
-    detail: { flight_code: row.flight_code, neighborhood: row.neighborhood, flown_at: row.flown_at },
+    detail: {
+      flight_code: row.flight_code,
+      neighborhood: row.neighborhood,
+      flown_at: row.flown_at,
+    },
   });
   return NextResponse.json({ flight }, { status: 201 });
 }

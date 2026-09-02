@@ -51,8 +51,10 @@ export function PropertyForm({
     if (!values.address.trim()) return "Address is required.";
     const lat = Number(values.lat);
     const lng = Number(values.lng);
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90) return "Latitude must be between -90 and 90.";
-    if (!Number.isFinite(lng) || lng < -180 || lng > 180) return "Longitude must be between -180 and 180.";
+    if (!Number.isFinite(lat) || lat < -90 || lat > 90)
+      return "Latitude must be between -90 and 90.";
+    if (!Number.isFinite(lng) || lng < -180 || lng > 180)
+      return "Longitude must be between -180 and 180.";
     return null;
   }
 
@@ -98,7 +100,12 @@ export function PropertyForm({
 
   async function archive() {
     if (!initial) return;
-    if (!window.confirm(`Archive ${initial.address}? It disappears from the grid but keeps its scans.`)) return;
+    if (
+      !window.confirm(
+        `Archive ${initial.address}? It disappears from the grid but keeps its scans.`,
+      )
+    )
+      return;
     setState("archiving");
     setError(null);
     try {
@@ -120,7 +127,10 @@ export function PropertyForm({
   const busy = state === "saving" || state === "archiving";
 
   return (
-    <form onSubmit={submit} className="space-y-4 rounded-xl border border-surface-border bg-surface-raised p-5">
+    <form
+      onSubmit={submit}
+      className="space-y-4 rounded-xl border border-surface-border bg-surface-raised p-5"
+    >
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Parcel ID (APN)">
           <input
@@ -150,18 +160,43 @@ export function PropertyForm({
         </Field>
       </div>
       <Field label="Address">
-        <input className={input} value={values.address} onChange={set("address")} placeholder="1418 Ashwood Ct" required />
+        <input
+          className={input}
+          value={values.address}
+          onChange={set("address")}
+          placeholder="1418 Ashwood Ct"
+          required
+        />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Latitude">
-          <input className={input} value={values.lat} onChange={set("lat")} placeholder="35.2271" inputMode="decimal" required />
+          <input
+            className={input}
+            value={values.lat}
+            onChange={set("lat")}
+            placeholder="35.2271"
+            inputMode="decimal"
+            required
+          />
         </Field>
         <Field label="Longitude">
-          <input className={input} value={values.lng} onChange={set("lng")} placeholder="-80.8431" inputMode="decimal" required />
+          <input
+            className={input}
+            value={values.lng}
+            onChange={set("lng")}
+            placeholder="-80.8431"
+            inputMode="decimal"
+            required
+          />
         </Field>
       </div>
       <Field label="Notes">
-        <textarea className={clsx(input, "min-h-[80px]")} value={values.notes} onChange={set("notes")} placeholder="Owner contact, access notes…" />
+        <textarea
+          className={clsx(input, "min-h-[80px]")}
+          value={values.notes}
+          onChange={set("notes")}
+          placeholder="Owner contact, access notes…"
+        />
       </Field>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
@@ -175,7 +210,11 @@ export function PropertyForm({
             disabled={busy}
             className="flex items-center gap-2 rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300 transition hover:bg-red-500/10 disabled:opacity-50"
           >
-            {state === "archiving" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
+            {state === "archiving" ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Archive className="h-3.5 w-3.5" />
+            )}
             Archive property
           </button>
         ) : (
@@ -186,7 +225,11 @@ export function PropertyForm({
           disabled={busy}
           className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
         >
-          {state === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          {state === "saving" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4" />
+          )}
           {editing ? "Save changes" : "Add property"}
         </button>
       </div>

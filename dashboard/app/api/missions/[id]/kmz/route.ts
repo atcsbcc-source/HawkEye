@@ -33,6 +33,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     });
   } catch (err) {
     const status = err instanceof RangeError ? 422 : 500;
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Export failed" }, { status });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Export failed" },
+      { status },
+    );
   }
 }

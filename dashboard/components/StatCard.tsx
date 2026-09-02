@@ -50,7 +50,7 @@ export function StatCard({
             <span
               className={clsx(
                 "inline-flex items-center gap-1 font-mono text-[11px]",
-                delta.value >= 0 ? "text-emerald-300" : "text-red-300"
+                delta.value >= 0 ? "text-emerald-300" : "text-red-300",
               )}
             >
               {delta.value >= 0 ? (

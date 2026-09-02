@@ -1,14 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import {
-  BatteryMedium,
-  Gauge,
-  MountainSnow,
-  Navigation,
-  Radio,
-  Satellite,
-} from "lucide-react";
+import { BatteryMedium, Gauge, MountainSnow, Navigation, Radio, Satellite } from "lucide-react";
 import type { Telemetry } from "@/lib/ops-types";
 import { AIRBORNE_STATES, DRONE_STATE } from "@/lib/ui/status";
 import { fmtAge } from "@/lib/format";
@@ -66,11 +59,10 @@ export function TelemetryRail({
         </h2>
         <span
           role="status"
-          className={clsx(
-            "rounded px-1.5 py-0.5 font-mono text-label uppercase",
-            pill.className
-          )}
-          title={reconnects > 0 ? `${reconnects} reconnect${reconnects === 1 ? "" : "s"}` : undefined}
+          className={clsx("rounded px-1.5 py-0.5 font-mono text-label uppercase", pill.className)}
+          title={
+            reconnects > 0 ? `${reconnects} reconnect${reconnects === 1 ? "" : "s"}` : undefined
+          }
         >
           {pill.label}
         </span>
@@ -89,7 +81,7 @@ export function TelemetryRail({
             className={clsx(
               "h-2 w-2 rounded-full",
               style.dot,
-              live && AIRBORNE_STATES.has(state) && "motion-safe:animate-pulse"
+              live && AIRBORNE_STATES.has(state) && "motion-safe:animate-pulse",
             )}
           />
           {live || !telemetry ? style.label.toUpperCase() : `${style.label.toUpperCase()}?`}
@@ -99,13 +91,11 @@ export function TelemetryRail({
       <p
         className={clsx(
           "mt-1 font-mono text-label uppercase",
-          link === "stale" ? "text-red-300" : "text-slate-400"
+          link === "stale" ? "text-red-300" : "text-slate-400",
         )}
         aria-live="polite"
       >
-        {frameAgeMs === null
-          ? "No frame yet"
-          : `Last frame ${fmtAge(frameAgeMs)} ago`}
+        {frameAgeMs === null ? "No frame yet" : `Last frame ${fmtAge(frameAgeMs)} ago`}
         {reconnects > 0 && ` · ${reconnects} reconnect${reconnects === 1 ? "" : "s"}`}
       </p>
 

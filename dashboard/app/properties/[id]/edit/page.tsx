@@ -21,7 +21,9 @@ export default async function EditPropertyPage({ params }: { params: { id: strin
       </Link>
       <div>
         <h2 className="text-2xl font-semibold text-white">Edit property</h2>
-        <p className="mt-1 text-sm text-slate-400">APN {lead.parcel_id} · status {lead.status}</p>
+        <p className="mt-1 text-sm text-slate-400">
+          APN {lead.parcel_id} · status {lead.status}
+        </p>
       </div>
       <PropertyForm initial={lead} neighborhoods={neighborhoods} />
     </div>

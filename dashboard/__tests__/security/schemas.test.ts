@@ -69,33 +69,81 @@ describe("MissionCreate", () => {
       ],
     });
     expect(r.success).toBe(false);
-    expect(polygonBoundsKm2([[35.2, -80.85], [35.2, -80.8], [35.25, -80.8]])).toBeGreaterThan(4);
+    expect(
+      polygonBoundsKm2([
+        [35.2, -80.85],
+        [35.2, -80.8],
+        [35.25, -80.8],
+      ]),
+    ).toBeGreaterThan(4);
   });
 
   it("rejects too few / too many points, non-finite, out of range, unknown keys", () => {
-    expect(MissionCreate.safeParse({ name: "x", polygon: [[0, 0], [0, 1]] }).success).toBe(false);
+    expect(
+      MissionCreate.safeParse({
+        name: "x",
+        polygon: [
+          [0, 0],
+          [0, 1],
+        ],
+      }).success,
+    ).toBe(false);
     expect(
       MissionCreate.safeParse({
         name: "x",
         polygon: Array.from({ length: 65 }, (_, i) => [0.0001 * i, 0.0001 * i]),
-      }).success
+      }).success,
     ).toBe(false);
-    expect(MissionCreate.safeParse({ name: "x", polygon: [[91, 0], [0, 0], [0, 1]] }).success).toBe(
-      false
-    );
-    expect(MissionCreate.safeParse({ name: "x", polygon: [[0, 181], [0, 0], [1, 0]] }).success).toBe(
-      false
-    );
     expect(
-      MissionCreate.safeParse({ name: "x", polygon: [[0, 0], [0, 0.001], [0.001, 0]], extra: 1 })
-        .success
+      MissionCreate.safeParse({
+        name: "x",
+        polygon: [
+          [91, 0],
+          [0, 0],
+          [0, 1],
+        ],
+      }).success,
     ).toBe(false);
-    expect(MissionCreate.safeParse({ name: "", polygon: [[0, 0], [0, 0.001], [0.001, 0]] }).success).toBe(
-      false
-    );
     expect(
-      MissionCreate.safeParse({ name: "a".repeat(81), polygon: [[0, 0], [0, 0.001], [0.001, 0]] })
-        .success
+      MissionCreate.safeParse({
+        name: "x",
+        polygon: [
+          [0, 181],
+          [0, 0],
+          [1, 0],
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      MissionCreate.safeParse({
+        name: "x",
+        polygon: [
+          [0, 0],
+          [0, 0.001],
+          [0.001, 0],
+        ],
+        extra: 1,
+      }).success,
+    ).toBe(false);
+    expect(
+      MissionCreate.safeParse({
+        name: "",
+        polygon: [
+          [0, 0],
+          [0, 0.001],
+          [0.001, 0],
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      MissionCreate.safeParse({
+        name: "a".repeat(81),
+        polygon: [
+          [0, 0],
+          [0, 0.001],
+          [0.001, 0],
+        ],
+      }).success,
     ).toBe(false);
   });
 });
@@ -105,7 +153,9 @@ describe("MissionPatch / RulePatch", () => {
     expect(MissionPatch.safeParse({ id: UUID, action: "launch" }).success).toBe(true);
     expect(MissionPatch.safeParse({ id: "nope", action: "launch" }).success).toBe(false);
     expect(MissionPatch.safeParse({ id: UUID, action: "explode" }).success).toBe(false);
-    expect(RulePatch.safeParse({ id: "00000000-0000-4000-8000-000000000001", enabled: false }).success).toBe(true);
+    expect(
+      RulePatch.safeParse({ id: "00000000-0000-4000-8000-000000000001", enabled: false }).success,
+    ).toBe(true);
     expect(RulePatch.safeParse({ id: "rule-default-flag", enabled: true }).success).toBe(false);
     expect(RulePatch.safeParse({ id: UUID, enabled: "yes" }).success).toBe(false);
   });
@@ -120,7 +170,7 @@ describe("RuleCreate", () => {
         triggerConfig: { min_confidence: 80 },
         actionType: "flag_property",
         actionConfig: {},
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       RuleCreate.safeParse({
@@ -129,7 +179,7 @@ describe("RuleCreate", () => {
         triggerConfig: { min_days: 5 },
         actionType: "flag_property",
         actionConfig: {},
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RuleCreate.safeParse({
@@ -138,14 +188,14 @@ describe("RuleCreate", () => {
         triggerConfig: { min_days: 60 },
         actionType: "dispatch_webhook",
         actionConfig: { url: "https://hooks.zapier.com/a" },
-      }).success
+      }).success,
     ).toBe(true);
     expect(
       RuleCreate.safeParse({
         name: "m",
         triggerType: "mission_completed",
         actionType: "notify",
-      }).success
+      }).success,
     ).toBe(true);
   });
 
@@ -157,7 +207,7 @@ describe("RuleCreate", () => {
         triggerConfig: { min_confidence: 80 },
         actionType: "flag_property",
         actionConfig: { url: "https://example.com" },
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RuleCreate.safeParse({
@@ -166,7 +216,7 @@ describe("RuleCreate", () => {
         triggerConfig: { min_days: 60 },
         actionType: "dispatch_webhook",
         actionConfig: { url: "not-a-url" },
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       RuleCreate.safeParse({
@@ -175,7 +225,7 @@ describe("RuleCreate", () => {
         triggerConfig: { min_days: 60, evil: true },
         actionType: "dispatch_webhook",
         actionConfig: {},
-      }).success
+      }).success,
     ).toBe(false);
   });
 });
@@ -194,7 +244,7 @@ describe("Evaluate / Dispatch (dev vs supabase mode)", () => {
       Evaluate.safeParse({
         trigger: "scan_processed",
         payload: { property_id: "m1", vacancy_confidence: 90 },
-      }).success
+      }).success,
     ).toBe(true);
 
     process.env.NEXT_PUBLIC_SUPABASE_URL = "https://x.supabase.co";
@@ -204,7 +254,7 @@ describe("Evaluate / Dispatch (dev vs supabase mode)", () => {
       Evaluate.safeParse({
         trigger: "scan_processed",
         payload: { property_id: UUID, vacancy_confidence: 90 },
-      }).success
+      }).success,
     ).toBe(true);
   });
 
@@ -214,22 +264,22 @@ describe("Evaluate / Dispatch (dev vs supabase mode)", () => {
       Evaluate.safeParse({
         trigger: "scan_processed",
         payload: { property_id: "m1", vacancy_confidence: 101 },
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       Evaluate.safeParse({
         trigger: "scan_processed",
         payload: { property_id: "m1", vacancy_confidence: 90, status: "dispatched" },
-      }).success
+      }).success,
     ).toBe(false);
     expect(
       Evaluate.safeParse({
         trigger: "distress_threshold",
         payload: { property_id: "m1", days_distressed: 99999 },
-      }).success
+      }).success,
     ).toBe(false);
     expect(
-      Evaluate.safeParse({ trigger: "mission_completed", payload: { missionId: "abc" } }).success
+      Evaluate.safeParse({ trigger: "mission_completed", payload: { missionId: "abc" } }).success,
     ).toBe(false);
     expect(Evaluate.safeParse({ trigger: "reboot", payload: {} }).success).toBe(false);
   });
@@ -281,11 +331,9 @@ describe("parseJson", () => {
       expect(body.issues.length).toBeGreaterThan(0);
     }
 
-    const big = await parseJson(
-      post(JSON.stringify({ propertyId: "m".repeat(5000) })),
-      Dispatch,
-      { maxBytes: 1024 }
-    );
+    const big = await parseJson(post(JSON.stringify({ propertyId: "m".repeat(5000) })), Dispatch, {
+      maxBytes: 1024,
+    });
     expect(big.ok).toBe(false);
     if (!big.ok) expect(big.res.status).toBe(413);
   });

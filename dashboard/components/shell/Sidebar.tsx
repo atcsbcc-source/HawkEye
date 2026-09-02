@@ -22,7 +22,7 @@ export function NavList({ onNavigate }: { onNavigate?: () => void }) {
               "relative flex h-9 items-center gap-3 rounded-lg px-3 text-sm transition",
               active
                 ? "bg-sky-500/10 text-white before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-r before:bg-sky-400"
-                : "text-slate-400 hover:bg-surface hover:text-slate-100"
+                : "text-slate-400 hover:bg-surface hover:text-slate-100",
             )}
           >
             <Icon className="h-4 w-4 shrink-0" aria-hidden />

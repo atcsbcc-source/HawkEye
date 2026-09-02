@@ -1,10 +1,4 @@
-import {
-  LayoutDashboard,
-  Plane,
-  Radar,
-  Workflow,
-  type LucideIcon,
-} from "lucide-react";
+import { LayoutDashboard, Plane, Radar, Workflow, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;

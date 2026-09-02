@@ -54,10 +54,7 @@ export const PATCH = withAuth(
     try {
       const mission = action === "launch" ? await launchMission(id) : await abortMission(id);
       if (!mission) {
-        return apiError(
-          "Mission not actionable (already active elsewhere, or wrong state)",
-          409
-        );
+        return apiError("Mission not actionable (already active elsewhere, or wrong state)", 409);
       }
       return NextResponse.json({ mission });
     } catch (err) {
@@ -65,5 +62,5 @@ export const PATCH = withAuth(
       return apiError(`Aircraft adapter rejected ${action}`, 502);
     }
   },
-  { role: "admin" }
+  { role: "admin" },
 );

@@ -17,11 +17,7 @@ export const dynamic = "force-dynamic";
 // Shared between generateMetadata and the page within one request.
 const getLead = cache(fetchLead);
 
-export async function generateMetadata({
-  params,
-}: {
-  params: { id: string };
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
   const lead = await getLead(params.id);
   return { title: lead?.address ?? "Property" };
 }

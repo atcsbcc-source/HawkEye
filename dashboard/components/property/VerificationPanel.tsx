@@ -117,7 +117,7 @@ export function VerificationPanel({
   async function record(v: (typeof VERDICTS)[number]) {
     if (v.demotes && lead.status !== "active") {
       const ok = window.confirm(
-        `${v.label}: this returns ${lead.address} to ACTIVE, resets its distress clock and snoozes auto-flagging for 8 weeks. Continue?`
+        `${v.label}: this returns ${lead.address} to ACTIVE, resets its distress clock and snoozes auto-flagging for 8 weeks. Continue?`,
       );
       if (!ok) return;
     }
@@ -140,7 +140,9 @@ export function VerificationPanel({
       setNote("");
       setMessage({
         tone: "ok",
-        text: v.demotes ? `Recorded ${v.label.toLowerCase()} — parcel returned to active.` : `Recorded ${v.label.toLowerCase()}.`,
+        text: v.demotes
+          ? `Recorded ${v.label.toLowerCase()} — parcel returned to active.`
+          : `Recorded ${v.label.toLowerCase()}.`,
       });
       router.refresh();
     } catch (err) {
@@ -153,12 +155,16 @@ export function VerificationPanel({
   return (
     <section className="space-y-4 rounded-xl border border-surface-border bg-surface-raised p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Verification</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Verification
+        </p>
         <p className="text-xs text-slate-400">
           {current ? (
             <>
               Current verdict: <span className="text-slate-100">{VERDICT_LABEL[current]}</span>
-              {verifiedAt && <span className="text-slate-500"> · {new Date(verifiedAt).toLocaleString()}</span>}
+              {verifiedAt && (
+                <span className="text-slate-500"> · {new Date(verifiedAt).toLocaleString()}</span>
+              )}
             </>
           ) : (
             "No verdict yet"
@@ -180,10 +186,14 @@ export function VerificationPanel({
               className={clsx(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition disabled:opacity-50",
                 v.tone,
-                active && "ring-1 ring-inset ring-current bg-white/5"
+                active && "bg-white/5 ring-1 ring-inset ring-current",
               )}
             >
-              {busy === v.value ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <Icon className="h-4 w-4 shrink-0" />}
+              {busy === v.value ? (
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+              ) : (
+                <Icon className="h-4 w-4 shrink-0" />
+              )}
               <span className="font-medium">{v.label}</span>
             </button>
           );
@@ -199,12 +209,16 @@ export function VerificationPanel({
       />
 
       {message && (
-        <p className={clsx("text-xs", message.tone === "ok" ? "text-emerald-300" : "text-red-400")}>{message.text}</p>
+        <p className={clsx("text-xs", message.tone === "ok" ? "text-emerald-300" : "text-red-400")}>
+          {message.text}
+        </p>
       )}
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Property notes</span>
+          <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
+            Property notes
+          </span>
           <span className="text-[10px] text-slate-500">
             {notesState === "saving" && "Saving…"}
             {notesState === "saved" && "Saved"}
@@ -227,10 +241,14 @@ export function VerificationPanel({
         <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">History</p>
         <ul className="mt-2 space-y-1.5">
           {history === null && <li className="text-xs text-slate-500">Loading…</li>}
-          {history?.length === 0 && <li className="text-xs text-slate-500">No verdicts recorded for this parcel.</li>}
+          {history?.length === 0 && (
+            <li className="text-xs text-slate-500">No verdicts recorded for this parcel.</li>
+          )}
           {history?.map((h) => (
             <li key={h.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
-              <span className="font-mono text-[10px] text-slate-500">{new Date(h.created_at).toLocaleString()}</span>
+              <span className="font-mono text-[10px] text-slate-500">
+                {new Date(h.created_at).toLocaleString()}
+              </span>
               <span className="text-slate-100">{VERDICT_LABEL[h.verdict]}</span>
               {h.verified_by && <span className="text-slate-500">by {h.verified_by}</span>}
               {h.note && <span className="text-slate-400">— {h.note}</span>}

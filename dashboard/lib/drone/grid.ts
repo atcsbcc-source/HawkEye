@@ -113,7 +113,10 @@ function scanline(polygon: LatLng[], lat: number): number[] {
   return xs.sort((a, b) => a - b);
 }
 
-export function groundFootprint(altitudeM: number, camera: CameraModel): { across: number; along: number } {
+export function groundFootprint(
+  altitudeM: number,
+  camera: CameraModel,
+): { across: number; along: number } {
   return {
     across: (altitudeM * camera.sensorWidthMm) / camera.focalMm,
     along: (altitudeM * camera.sensorHeightMm) / camera.focalMm,
@@ -162,9 +165,12 @@ export function planGrid(polygon: LatLng[], options: GridOptions = {}): GridPlan
   const rowStepDeg = rowSpacingM / M_PER_DEG_LAT;
 
   // Rows sit at minLat + spacing/2 + i*spacing; a very thin AO gets one row.
-  const rowCount = spanM <= rowSpacingM ? 1 : Math.floor((spanM - rowSpacingM / 2) / rowSpacingM) + 1;
+  const rowCount =
+    spanM <= rowSpacingM ? 1 : Math.floor((spanM - rowSpacingM / 2) / rowSpacingM) + 1;
   if (!Number.isFinite(rowCount) || rowCount > MAX_ROWS) {
-    throw new RangeError(`grid would need ${rowCount} rows (max ${MAX_ROWS}); raise altitude or shrink the AO`);
+    throw new RangeError(
+      `grid would need ${rowCount} rows (max ${MAX_ROWS}); raise altitude or shrink the AO`,
+    );
   }
 
   const waypoints: LatLng[] = [];
@@ -202,7 +208,10 @@ export function planGrid(polygon: LatLng[], options: GridOptions = {}): GridPlan
     gsdCmPerPx: Number(gsdCmPerPx(altitudeM, camera).toFixed(3)),
     rowCount,
     rowSpacingM: Number(rowSpacingM.toFixed(2)),
-    footprintM: { across: Number(footprint.across.toFixed(1)), along: Number(footprint.along.toFixed(1)) },
+    footprintM: {
+      across: Number(footprint.across.toFixed(1)),
+      along: Number(footprint.along.toFixed(1)),
+    },
     photoIntervalM: Number(photoIntervalM.toFixed(1)),
     photoIntervalS,
     distanceM: Math.round(distance),

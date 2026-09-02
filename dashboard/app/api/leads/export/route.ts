@@ -21,7 +21,10 @@ export async function GET(req: Request) {
   }
   const statusRaw = q.get("status");
   if (statusRaw && !STATUSES.includes(statusRaw as LeadStatus)) {
-    return NextResponse.json({ error: `status must be one of ${STATUSES.join(", ")}` }, { status: 400 });
+    return NextResponse.json(
+      { error: `status must be one of ${STATUSES.join(", ")}` },
+      { status: 400 },
+    );
   }
   const minDaysRaw = q.get("minDays");
   const minDays = minDaysRaw ? Number(minDaysRaw) : null;

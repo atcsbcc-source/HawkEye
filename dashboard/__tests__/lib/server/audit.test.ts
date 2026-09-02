@@ -26,8 +26,20 @@ describe("audit (mock mode)", () => {
   });
 
   it("pushEvent unshifts newest-first with an id and timestamp", async () => {
-    await pushEvent({ actor: "test", eventType: "a", subjectType: null, subjectId: null, detail: {} });
-    await pushEvent({ actor: "test", eventType: "b", subjectType: "x", subjectId: "1", detail: { k: 1 } });
+    await pushEvent({
+      actor: "test",
+      eventType: "a",
+      subjectType: null,
+      subjectId: null,
+      detail: {},
+    });
+    await pushEvent({
+      actor: "test",
+      eventType: "b",
+      subjectType: "x",
+      subjectId: "1",
+      detail: { k: 1 },
+    });
     const events = await listEvents(10);
     expect(events.map((e) => e.eventType)).toEqual(["b", "a"]);
     expect(events[0].id).toMatch(/[0-9a-f-]{36}/);
@@ -37,7 +49,13 @@ describe("audit (mock mode)", () => {
 
   it("caps the in-memory store at AUDIT_MEMORY_CAP", async () => {
     for (let i = 0; i < AUDIT_MEMORY_CAP + 25; i += 1) {
-      await pushEvent({ actor: "test", eventType: `e${i}`, subjectType: null, subjectId: null, detail: {} });
+      await pushEvent({
+        actor: "test",
+        eventType: `e${i}`,
+        subjectType: null,
+        subjectId: null,
+        detail: {},
+      });
     }
     const all = await listEvents(AUDIT_MEMORY_CAP * 2);
     expect(all).toHaveLength(AUDIT_MEMORY_CAP);

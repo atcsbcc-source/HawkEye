@@ -36,7 +36,9 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  const admin = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const admin = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo: `${site.replace(/\/$/, "")}/auth/confirm`,

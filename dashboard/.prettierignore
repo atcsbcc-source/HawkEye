@@ -1,0 +1,9 @@
+# Build output and dependencies
+.next
+out
+node_modules
+coverage
+
+# Generated / lock files
+package-lock.json
+next-env.d.ts

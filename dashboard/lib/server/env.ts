@@ -45,7 +45,7 @@ const EnvSchema = z
             return false;
           }
         },
-        { message: "must be a public https URL (see WEBHOOK_ALLOWED_HOSTS)" }
+        { message: "must be a public https URL (see WEBHOOK_ALLOWED_HOSTS)" },
       )
       .optional(),
     HAWKEYE_PIPELINE_TOKEN: z.string().min(32, "must be at least 32 characters").optional(),

@@ -40,9 +40,16 @@ export class DjiCloudAdapter implements DroneAdapter {
       serial: this.serial,
       model: this.model,
       state: "offline",
-      lat: 0, lng: 0, altM: 0, headingDeg: 0, speedMps: 0,
-      batteryPct: 0, satellites: 0, linkQuality: 0,
-      missionId: null, missionProgress: 0,
+      lat: 0,
+      lng: 0,
+      altM: 0,
+      headingDeg: 0,
+      speedMps: 0,
+      batteryPct: 0,
+      satellites: 0,
+      linkQuality: 0,
+      missionId: null,
+      missionProgress: 0,
       ts: new Date(0).toISOString(),
     };
   }
@@ -51,11 +58,15 @@ export class DjiCloudAdapter implements DroneAdapter {
     // TODO: generate a wayline KMZ from mission.polygon (grid at your GSD),
     // upload it, then publish flighttask_prepare/flighttask_execute via the
     // MQTT bridge. Template: https://developer.dji.com/doc/cloud-api-tutorial/en/feature-set/dock-feature-set/wayline-task.html
-    throw new Error("DJI Cloud API bridge not configured — set up an MQTT broker first (see class docs).");
+    throw new Error(
+      "DJI Cloud API bridge not configured — set up an MQTT broker first (see class docs).",
+    );
   }
 
   async abortMission(): Promise<void> {
     // TODO: publish `flighttask_stop` service call via the MQTT bridge.
-    throw new Error("DJI Cloud API bridge not configured — set up an MQTT broker first (see class docs).");
+    throw new Error(
+      "DJI Cloud API bridge not configured — set up an MQTT broker first (see class docs).",
+    );
   }
 }

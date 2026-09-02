@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { strFromU8, unzipSync } from "fflate";
 import { planGrid, type LatLng } from "../../lib/drone/grid";
-import { buildKml, buildKmz, buildTemplateKml, buildWaylinesWpml, safeFileName, xmlEscape } from "../../lib/drone/wpml";
+import {
+  buildKml,
+  buildKmz,
+  buildTemplateKml,
+  buildWaylinesWpml,
+  safeFileName,
+  xmlEscape,
+} from "../../lib/drone/wpml";
 import type { Mission } from "../../lib/ops-types";
 
 const polygon: LatLng[] = [
@@ -45,13 +52,21 @@ describe("buildKmz", () => {
     const waylines = buildWaylinesWpml(mission, plan);
     expect(count(waylines, "<Placemark>")).toBe(plan.waypoints.length);
     expect(count(waylines, "<wpml:index>")).toBe(plan.waypoints.length);
-    expect(count(waylines, `<wpml:height>${plan.altitudeM}</wpml:height>`)).toBe(plan.waypoints.length);
-    expect(count(waylines, `<wpml:waypointSpeed>${plan.speedMps}</wpml:waypointSpeed>`)).toBe(plan.waypoints.length);
+    expect(count(waylines, `<wpml:height>${plan.altitudeM}</wpml:height>`)).toBe(
+      plan.waypoints.length,
+    );
+    expect(count(waylines, `<wpml:waypointSpeed>${plan.speedMps}</wpml:waypointSpeed>`)).toBe(
+      plan.waypoints.length,
+    );
     expect(waylines).toContain("<wpml:actionTriggerType>multipleTiming</wpml:actionTriggerType>");
-    expect(waylines).toContain(`<wpml:actionTriggerParam>${plan.photoIntervalS}</wpml:actionTriggerParam>`);
+    expect(waylines).toContain(
+      `<wpml:actionTriggerParam>${plan.photoIntervalS}</wpml:actionTriggerParam>`,
+    );
     // Coordinates are lng,lat in KML order.
     const first = plan.waypoints[0];
-    expect(waylines).toContain(`<coordinates>${first[1].toFixed(7)},${first[0].toFixed(7)}</coordinates>`);
+    expect(waylines).toContain(
+      `<coordinates>${first[1].toFixed(7)},${first[0].toFixed(7)}</coordinates>`,
+    );
 
     const template = buildTemplateKml(mission, plan);
     expect(count(template, "<Placemark>")).toBe(plan.waypoints.length);

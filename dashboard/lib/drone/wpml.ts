@@ -21,16 +21,21 @@ const PAYLOAD_ENUM = 66;
 
 export function xmlEscape(s: string): string {
   return s.replace(/[<>&"']/g, (c) =>
-    c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : c === '"' ? "&quot;" : "&apos;"
+    c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === "&" ? "&amp;" : c === '"' ? "&quot;" : "&apos;",
   );
 }
 
 const coord = ([lat, lng]: LatLng, alt?: number) =>
-  alt === undefined ? `${lng.toFixed(7)},${lat.toFixed(7)}` : `${lng.toFixed(7)},${lat.toFixed(7)},${alt}`;
+  alt === undefined
+    ? `${lng.toFixed(7)},${lat.toFixed(7)}`
+    : `${lng.toFixed(7)},${lat.toFixed(7)},${alt}`;
 
 /** Filename-safe mission name. */
 export function safeFileName(name: string): string {
-  const cleaned = name.trim().replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "");
+  const cleaned = name
+    .trim()
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
   return cleaned || "mission";
 }
 
@@ -81,7 +86,7 @@ export function buildTemplateKml(mission: Mission, plan: GridPlan, now = new Dat
       <wpml:useGlobalHeadingParam>1</wpml:useGlobalHeadingParam>
       <wpml:useGlobalTurnParam>1</wpml:useGlobalTurnParam>
       <wpml:useStraightLine>1</wpml:useStraightLine>
-    </Placemark>`
+    </Placemark>`,
     )
     .join("\n");
 
@@ -189,7 +194,7 @@ export function buildKmz(mission: Mission, plan: GridPlan, now = new Date()): Ui
       "wpmz/template.kml": strToU8(buildTemplateKml(mission, plan, now)),
       "wpmz/waylines.wpml": strToU8(buildWaylinesWpml(mission, plan)),
     },
-    { level: 6 }
+    { level: 6 },
   );
 }
 
@@ -203,12 +208,12 @@ export function buildKml(mission: Mission, plan: GridPlan): string {
       <name>${i}</name>
       <styleUrl>#wp</styleUrl>
       <Point><altitudeMode>relativeToGround</altitudeMode><coordinates>${coord(wp, plan.altitudeM)}</coordinates></Point>
-    </Placemark>`
+    </Placemark>`,
     )
     .join("\n");
   const desc = xmlEscape(
     `${plan.rowCount} rows · ${plan.waypoints.length} waypoints · ${plan.distanceM} m · ~${plan.estimatedMinutes} min · ` +
-      `${plan.altitudeM} m AGL · GSD ${plan.gsdCmPerPx} cm/px · ${plan.camera.name}`
+      `${plan.altitudeM} m AGL · GSD ${plan.gsdCmPerPx} cm/px · ${plan.camera.name}`,
   );
   return `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="${KML_NS}">

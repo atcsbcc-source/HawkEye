@@ -22,7 +22,15 @@ describe("parseCsv", () => {
     expect(res.error).toBeUndefined();
     expect(res.invalid).toEqual([]);
     expect(res.rows).toEqual([
-      { row: 1, parcel_id: "042-1", address: "1 Main St", lat: 35.22, lng: -80.84, neighborhood: "Oakwood", notes: null },
+      {
+        row: 1,
+        parcel_id: "042-1",
+        address: "1 Main St",
+        lat: 35.22,
+        lng: -80.84,
+        neighborhood: "Oakwood",
+        notes: null,
+      },
     ]);
   });
 
@@ -105,8 +113,16 @@ describe("parseGeoJson", () => {
     const res = parseGeoJson({
       type: "FeatureCollection",
       features: [
-        { type: "Feature", geometry: { type: "LineString", coordinates: [] }, properties: { parcel_id: "L" } },
-        { type: "Feature", geometry: { type: "Point", coordinates: [-80.8, 35.2] }, properties: {} },
+        {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: [] },
+          properties: { parcel_id: "L" },
+        },
+        {
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [-80.8, 35.2] },
+          properties: {},
+        },
       ],
     });
     expect(res.rows).toHaveLength(0);

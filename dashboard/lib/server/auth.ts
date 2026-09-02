@@ -23,7 +23,7 @@ export interface AuthUser {
 export class AuthError extends Error {
   constructor(
     readonly status: 401 | 403 | 503,
-    message: string
+    message: string,
   ) {
     super(message);
     this.name = "AuthError";
@@ -116,7 +116,7 @@ export function bearerToken(req: Request): string | null {
  */
 export function requirePipelineToken(
   req: Request,
-  envVar: PipelineTokenVar | readonly PipelineTokenVar[] = PIPELINE_TOKEN_VARS
+  envVar: PipelineTokenVar | readonly PipelineTokenVar[] = PIPELINE_TOKEN_VARS,
 ): { name: PipelineTokenVar } | null {
   const token = bearerToken(req);
   if (!token) return null;

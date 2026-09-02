@@ -93,7 +93,7 @@ export const POST = withAuth(async (req, user) => {
       console.error("[dispatch] status update failed", error.code);
       return NextResponse.json(
         { error: "CRM notified but status update failed", forwarded },
-        { status: 500 }
+        { status: 500 },
       );
     }
   }

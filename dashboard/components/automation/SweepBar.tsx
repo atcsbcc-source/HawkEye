@@ -23,7 +23,9 @@ export function SweepBar() {
     try {
       const res = await fetch("/api/audit");
       const json = await res.json();
-      const ev = (json.events as AuditEvent[] | undefined)?.find((e) => e.eventType === "automation.sweep");
+      const ev = (json.events as AuditEvent[] | undefined)?.find(
+        (e) => e.eventType === "automation.sweep",
+      );
       if (ev) {
         const d = ev.detail as Record<string, number | null | undefined>;
         setLast({
@@ -72,21 +74,26 @@ export function SweepBar() {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-surface-border bg-surface-raised px-4 py-3">
       <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Distress sweep</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Distress sweep
+        </p>
         <p className="mt-1 text-xs text-slate-400">
           {last ? (
             <>
               Last sweep {new Date(last.at).toLocaleString()} · scanned{" "}
-              <span className="text-slate-100 tabular-nums">{last.scanned}</span> · fired{" "}
-              <span className="text-amber-300 tabular-nums">{last.fired}</span> · skipped{" "}
-              <span className="text-slate-100 tabular-nums">{last.skipped}</span>
+              <span className="tabular-nums text-slate-100">{last.scanned}</span> · fired{" "}
+              <span className="tabular-nums text-amber-300">{last.fired}</span> · skipped{" "}
+              <span className="tabular-nums text-slate-100">{last.skipped}</span>
               {last.dispatched !== undefined && (
                 <>
                   {" "}
-                  · dispatched <span className="text-emerald-300 tabular-nums">{last.dispatched}</span>
+                  · dispatched{" "}
+                  <span className="tabular-nums text-emerald-300">{last.dispatched}</span>
                 </>
               )}
-              {last.minDays != null && <span className="text-slate-500"> · threshold {last.minDays}d</span>}
+              {last.minDays != null && (
+                <span className="text-slate-500"> · threshold {last.minDays}d</span>
+              )}
             </>
           ) : (
             "No sweep recorded yet. Scheduled daily at 13:00 UTC via vercel.json; run it now to evaluate distress rules against flagged parcels."
@@ -99,7 +106,11 @@ export function SweepBar() {
         disabled={running}
         className="flex items-center gap-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-500/20 disabled:opacity-50"
       >
-        {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+        {running ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <RefreshCw className="h-3.5 w-3.5" />
+        )}
         Run sweep now
       </button>
     </div>

@@ -83,7 +83,7 @@ export function PropertyGrid({
       const qs = p.toString();
       return qs ? `${pathname}?${qs}` : pathname;
     },
-    [pathname]
+    [pathname],
   );
 
   const setStatus = (s: StatusFilter) =>
@@ -111,8 +111,7 @@ export function PropertyGrid({
       .filter((l) => status === "all" || l.status === status)
       .filter((l) => !over || (l.days_distressed ?? 0) >= DISTRESS_THRESHOLD_DAYS)
       .filter(
-        (l) =>
-          !q || l.address.toLowerCase().includes(q) || l.parcel_id.toLowerCase().includes(q)
+        (l) => !q || l.address.toLowerCase().includes(q) || l.parcel_id.toLowerCase().includes(q),
       );
     const dir = sortDir === "asc" ? 1 : -1;
     return filtered.sort((a, b) => {
@@ -168,7 +167,7 @@ export function PropertyGrid({
               onClick={() => setStatus(s)}
               className={clsx(
                 "h-7 rounded-md px-2.5 text-xs capitalize transition",
-                status === s ? "bg-sky-700 text-white" : "text-slate-400 hover:text-white"
+                status === s ? "bg-sky-700 text-white" : "text-slate-400 hover:text-white",
               )}
             >
               {s}
@@ -184,7 +183,7 @@ export function PropertyGrid({
             "btn h-9 gap-2 border px-3 text-xs",
             over
               ? "border-red-500/50 bg-red-500/10 text-red-300"
-              : "border-surface-border text-slate-400 hover:text-white"
+              : "border-surface-border text-slate-400 hover:text-white",
           )}
         >
           <Filter className="h-3.5 w-3.5" aria-hidden />
@@ -216,7 +215,7 @@ export function PropertyGrid({
                     aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
                     className={clsx(
                       "sticky top-0 z-10 border-b border-surface-border bg-surface-raised/95 px-3 py-2.5 font-medium backdrop-blur",
-                      c.className
+                      c.className,
                     )}
                   >
                     <button
@@ -224,7 +223,7 @@ export function PropertyGrid({
                       onClick={() => toggleSort(c.key)}
                       className={clsx(
                         "inline-flex items-center gap-1 rounded uppercase tracking-wide transition hover:text-slate-200",
-                        active && "text-white"
+                        active && "text-white",
                       )}
                     >
                       {c.label}
@@ -305,7 +304,7 @@ export function PropertyGrid({
                   <td
                     className={clsx(
                       "hidden px-3 py-2.5 text-xs md:table-cell",
-                      staleScan ? "text-red-300" : "text-slate-400"
+                      staleScan ? "text-red-300" : "text-slate-400",
                     )}
                     title={l.latest_scan_at ? fmtDateTime(l.latest_scan_at) : undefined}
                     suppressHydrationWarning
@@ -389,8 +388,12 @@ function EmptyState({
     <div className="mx-auto max-w-md space-y-1 text-slate-300">
       <p className="font-medium text-white">Mock mode has no parcels</p>
       <p className="text-slate-400">
-        Set <code className="rounded bg-surface px-1 font-mono text-[11px]">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
-        to read live data, or restore the sample leads in <code className="font-mono text-[11px]">lib/mock.ts</code>.
+        Set{" "}
+        <code className="rounded bg-surface px-1 font-mono text-[11px]">
+          NEXT_PUBLIC_SUPABASE_URL
+        </code>{" "}
+        to read live data, or restore the sample leads in{" "}
+        <code className="font-mono text-[11px]">lib/mock.ts</code>.
       </p>
     </div>
   );

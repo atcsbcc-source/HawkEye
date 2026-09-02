@@ -1,5 +1,10 @@
 import { withAuth } from "@/lib/server/auth";
-import { initialFrame, MAX_SSE_CLIENTS, subscribe, subscriberCount } from "@/lib/server/telemetry-hub";
+import {
+  initialFrame,
+  MAX_SSE_CLIENTS,
+  subscribe,
+  subscriberCount,
+} from "@/lib/server/telemetry-hub";
 
 export const dynamic = "force-dynamic";
 

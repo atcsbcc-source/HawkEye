@@ -205,7 +205,10 @@ export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
   }
   for (const { address } of addresses) {
     if (isBlockedAddress(address)) {
-      throw new WebhookError("unsafe_url", "webhook host resolves to a private or reserved address");
+      throw new WebhookError(
+        "unsafe_url",
+        "webhook host resolves to a private or reserved address",
+      );
     }
   }
   return url;
@@ -214,14 +217,18 @@ export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
 // ---------------------------------------------------------------------------
 // Signed POST
 // ---------------------------------------------------------------------------
-export async function signPayload(secret: string, timestamp: string, body: string): Promise<string> {
+export async function signPayload(
+  secret: string,
+  timestamp: string,
+  body: string,
+): Promise<string> {
   const enc = new TextEncoder();
   const key = await globalThis.crypto.subtle.importKey(
     "raw",
     enc.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
   const sig = await globalThis.crypto.subtle.sign("HMAC", key, enc.encode(`${timestamp}.${body}`));
   return Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -242,7 +249,7 @@ export interface SafePostResult {
 export async function safePostJson(
   url: string,
   body: unknown,
-  opts: { timeoutMs?: number; skipDns?: boolean } = {}
+  opts: { timeoutMs?: number; skipDns?: boolean } = {},
 ): Promise<SafePostResult> {
   const timeoutMs = opts.timeoutMs ?? 8000;
   const target = opts.skipDns ? assertSafeWebhookUrlSync(url) : await assertSafeWebhookUrl(url);

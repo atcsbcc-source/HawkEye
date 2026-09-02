@@ -23,9 +23,13 @@ export const PropertyId = z
   .max(64)
   .refine((v) => isDevMode() || UUID_RE.test(v), { message: "must be a uuid" });
 
-const ScanId = z.string().min(1).max(64).refine((v) => isDevMode() || UUID_RE.test(v), {
-  message: "must be a uuid",
-});
+const ScanId = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine((v) => isDevMode() || UUID_RE.test(v), {
+    message: "must be a uuid",
+  });
 
 // ---------------------------------------------------------------------------
 // Missions
@@ -62,10 +66,13 @@ export const MissionCreate = z.strictObject({
     .array(LatLng)
     .min(3)
     .max(64)
-    .refine((p) => {
-      const area = polygonBoundsKm2(p);
-      return Number.isFinite(area) && area <= MAX_MISSION_AREA_KM2;
-    }, { message: `polygon bounding box must be at most ${MAX_MISSION_AREA_KM2} km²` }),
+    .refine(
+      (p) => {
+        const area = polygonBoundsKm2(p);
+        return Number.isFinite(area) && area <= MAX_MISSION_AREA_KM2;
+      },
+      { message: `polygon bounding box must be at most ${MAX_MISSION_AREA_KM2} km²` },
+    ),
 });
 export type MissionCreateInput = z.infer<typeof MissionCreate>;
 

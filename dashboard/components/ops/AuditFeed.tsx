@@ -78,11 +78,7 @@ export function AuditFeed({
       </div>
 
       {subjects.length > 1 && (
-        <div
-          role="radiogroup"
-          aria-label="Filter by subject"
-          className="mt-2 flex flex-wrap gap-1"
-        >
+        <div role="radiogroup" aria-label="Filter by subject" className="mt-2 flex flex-wrap gap-1">
           {["all", ...subjects].map((s) => (
             <button
               key={s}
@@ -94,10 +90,10 @@ export function AuditFeed({
                 "h-6 rounded-md px-2 font-mono text-label uppercase transition",
                 filter === s
                   ? "bg-sky-700 text-white"
-                  : "border border-surface-border text-slate-400 hover:text-white"
+                  : "border border-surface-border text-slate-400 hover:text-white",
               )}
             >
-              {s === "all" ? "All" : SUBJECT_LABEL[s] ?? s}
+              {s === "all" ? "All" : (SUBJECT_LABEL[s] ?? s)}
             </button>
           ))}
         </div>
@@ -109,7 +105,7 @@ export function AuditFeed({
         <ul
           className={clsx(
             "mt-3 overflow-y-auto pr-1",
-            compact ? "max-h-56" : "max-h-[28rem] lg:max-h-[calc(100vh-14rem)]"
+            compact ? "max-h-56" : "max-h-[28rem] lg:max-h-[calc(100vh-14rem)]",
           )}
         >
           {groups.length === 0 && (
@@ -131,7 +127,7 @@ export function AuditFeed({
                       <span
                         className={clsx(
                           "truncate font-mono",
-                          TYPE_TONE[e.eventType] ?? "text-slate-300"
+                          TYPE_TONE[e.eventType] ?? "text-slate-300",
                         )}
                       >
                         {e.eventType}

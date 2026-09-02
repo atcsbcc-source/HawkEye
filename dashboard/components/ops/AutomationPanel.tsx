@@ -75,12 +75,13 @@ export function AutomationPanel() {
       toast.success(`${rule.name} ${next ? "enabled" : "disabled"}`);
     } catch (err) {
       setRules(
-        (prev) => prev?.map((r) => (r.id === rule.id ? { ...r, enabled: rule.enabled } : r)) ?? prev
+        (prev) =>
+          prev?.map((r) => (r.id === rule.id ? { ...r, enabled: rule.enabled } : r)) ?? prev,
       );
       toast.error(
         `Could not ${next ? "enable" : "disable"} ${rule.name}: ${
           err instanceof Error ? err.message : "network error"
-        }`
+        }`,
       );
     } finally {
       setTogglingId(null);
@@ -133,7 +134,7 @@ export function AutomationPanel() {
                     <Zap
                       className={clsx(
                         "h-4 w-4 shrink-0",
-                        rule.enabled ? "text-amber-400" : "text-slate-500"
+                        rule.enabled ? "text-amber-400" : "text-slate-500",
                       )}
                       aria-hidden
                     />
@@ -147,7 +148,7 @@ export function AutomationPanel() {
                     onClick={() => toggle(rule)}
                     className={clsx(
                       "relative h-5 w-9 shrink-0 rounded-full transition disabled:opacity-60",
-                      rule.enabled ? "bg-emerald-500" : "bg-slate-600"
+                      rule.enabled ? "bg-emerald-500" : "bg-slate-600",
                     )}
                   >
                     <span className="sr-only">{rule.name}</span>
@@ -155,7 +156,7 @@ export function AutomationPanel() {
                       aria-hidden
                       className={clsx(
                         "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
-                        rule.enabled ? "left-[18px]" : "left-0.5"
+                        rule.enabled ? "left-[18px]" : "left-0.5",
                       )}
                     />
                   </button>
@@ -188,20 +189,14 @@ export function AutomationPanel() {
   );
 }
 
-function Chip({
-  children,
-  tone = "sky",
-}: {
-  children: React.ReactNode;
-  tone?: "sky" | "amber";
-}) {
+function Chip({ children, tone = "sky" }: { children: React.ReactNode; tone?: "sky" | "amber" }) {
   return (
     <span
       className={clsx(
         "rounded-md border px-2 py-1 font-mono text-[11px] uppercase tracking-wide",
         tone === "sky"
           ? "border-sky-500/40 bg-sky-500/10 text-sky-200"
-          : "border-amber-500/40 bg-amber-500/10 text-amber-200"
+          : "border-amber-500/40 bg-amber-500/10 text-amber-200",
       )}
     >
       {children}
@@ -234,13 +229,18 @@ function RuleBuilder({
         : triggerType === "distress_threshold"
           ? { min_days: Number(threshold) || DEFAULT_MIN_DAYS }
           : {};
-    const actionConfig =
-      actionType === "dispatch_webhook" && webhookUrl ? { url: webhookUrl } : {};
+    const actionConfig = actionType === "dispatch_webhook" && webhookUrl ? { url: webhookUrl } : {};
     try {
       const res = await fetch("/api/automation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), triggerType, triggerConfig, actionType, actionConfig }),
+        body: JSON.stringify({
+          name: name.trim(),
+          triggerType,
+          triggerConfig,
+          actionType,
+          actionConfig,
+        }),
       });
       let body: { rule?: AutomationRule; error?: string } = {};
       try {
@@ -287,7 +287,7 @@ function RuleBuilder({
             const t = e.target.value as TriggerType;
             setTriggerType(t);
             setThreshold(
-              String(t === "distress_threshold" ? DEFAULT_MIN_DAYS : DEFAULT_MIN_CONFIDENCE)
+              String(t === "distress_threshold" ? DEFAULT_MIN_DAYS : DEFAULT_MIN_CONFIDENCE),
             );
           }}
         >

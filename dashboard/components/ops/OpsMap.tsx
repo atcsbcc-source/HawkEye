@@ -71,7 +71,7 @@ export default function OpsMap({
         ]
       : [35.2271, -80.8431];
 
-  const focusLead = focusId ? leads.find((l) => l.id === focusId) ?? null : null;
+  const focusLead = focusId ? (leads.find((l) => l.id === focusId) ?? null) : null;
   const focus: LatLng | null = focusLead ? [focusLead.lat, focusLead.lng] : null;
 
   const aircraft: LatLng | null =
@@ -102,7 +102,12 @@ export default function OpsMap({
         {activeMission && (
           <Polygon
             positions={activeMission.polygon}
-            pathOptions={{ color: MISSION_AO_HEX, weight: 1.5, dashArray: "6 4", fillOpacity: 0.05 }}
+            pathOptions={{
+              color: MISSION_AO_HEX,
+              weight: 1.5,
+              dashArray: "6 4",
+              fillOpacity: 0.05,
+            }}
           />
         )}
 

@@ -37,7 +37,7 @@ async function handle(req: Request) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Sweep failed" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -85,20 +85,36 @@ interface Candidate {
 
 async function runSweep(): Promise<SweepResult> {
   const ranAt = new Date().toISOString();
-  const rules = (await listRules()).filter((r) => r.enabled && r.triggerType === "distress_threshold");
+  const rules = (await listRules()).filter(
+    (r) => r.enabled && r.triggerType === "distress_threshold",
+  );
   const emit = (r: SweepResult) => {
     pushEvent({
       actor: "system",
       eventType: "automation.sweep",
       subjectType: "rule",
       subjectId: null,
-      detail: { scanned: r.scanned, fired: r.fired, skipped: r.skipped, dispatched: r.dispatched, minDays: r.minDays },
+      detail: {
+        scanned: r.scanned,
+        fired: r.fired,
+        skipped: r.skipped,
+        dispatched: r.dispatched,
+        minDays: r.minDays,
+      },
     });
     return r;
   };
 
   if (rules.length === 0) {
-    return emit({ scanned: 0, fired: 0, skipped: 0, dispatched: 0, minDays: null, rules: 0, ranAt });
+    return emit({
+      scanned: 0,
+      fired: 0,
+      skipped: 0,
+      dispatched: 0,
+      minDays: null,
+      rules: 0,
+      ranAt,
+    });
   }
 
   const minDaysOf = (r: AutomationRule) => Number(r.triggerConfig.min_days ?? 60);
@@ -134,7 +150,10 @@ async function runSweep(): Promise<SweepResult> {
       .from("automation_rule_firings")
       .select("rule_id, subject_id")
       .eq("subject_type", "property")
-      .in("rule_id", rules.map((r) => r.id));
+      .in(
+        "rule_id",
+        rules.map((r) => r.id),
+      );
     for (const row of data ?? []) ledger.add(`${row.rule_id}:${row.subject_id}`);
   }
   const hasFiring = (ruleId: string, propertyId: string) =>
@@ -166,7 +185,7 @@ async function runSweep(): Promise<SweepResult> {
       if (db) {
         await db.from("automation_rule_firings").upsert(
           firedRules.map((r) => ({ rule_id: r.id, subject_type: "property", subject_id: c.id })),
-          { onConflict: "rule_id,subject_type,subject_id", ignoreDuplicates: true }
+          { onConflict: "rule_id,subject_type,subject_id", ignoreDuplicates: true },
         );
       } else {
         for (const r of firedRules) mockRecordFiring(r.id, c.id);
@@ -175,7 +194,11 @@ async function runSweep(): Promise<SweepResult> {
 
     if (firedRules.some((r) => r.actionType === "dispatch_webhook")) {
       if (db) {
-        await db.from("properties").update({ status: "dispatched" }).eq("id", c.id).eq("status", "flagged");
+        await db
+          .from("properties")
+          .update({ status: "dispatched" })
+          .eq("id", c.id)
+          .eq("status", "flagged");
       } else {
         mockUpdateProperty(c.id, { status: "dispatched" });
       }
@@ -183,5 +206,13 @@ async function runSweep(): Promise<SweepResult> {
     }
   }
 
-  return emit({ scanned: candidates.length, fired, skipped, dispatched, minDays, rules: rules.length, ranAt });
+  return emit({
+    scanned: candidates.length,
+    fired,
+    skipped,
+    dispatched,
+    minDays,
+    rules: rules.length,
+    ranAt,
+  });
 }

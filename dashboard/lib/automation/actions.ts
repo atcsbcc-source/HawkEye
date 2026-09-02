@@ -94,7 +94,11 @@ async function flagProperty(
     .eq("id", propertyId)
     .neq("status", "dispatched");
   if (error) throw new Error(`update properties: ${error.message}`);
-  return { ok: true, eventType: "property.flagged", detail: { property_id: propertyId, confidence } };
+  return {
+    ok: true,
+    eventType: "property.flagged",
+    detail: { property_id: propertyId, confidence },
+  };
 }
 
 async function dispatchWebhook(

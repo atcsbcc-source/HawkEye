@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getServiceSupabase } from "@/lib/supabase";
-import { dedupeParcels, parseParcels, type InvalidRow, type ParsedParcel } from "@/lib/import/parse";
+import {
+  dedupeParcels,
+  parseParcels,
+  type InvalidRow,
+  type ParsedParcel,
+} from "@/lib/import/parse";
 import { mockFindByParcel, mockUpsertProperty } from "@/lib/server/mock-store";
 import { pushEvent } from "@/lib/server/ops";
 
@@ -34,7 +39,10 @@ export async function POST(req: Request) {
       const form = await req.formData();
       const file = form.get("file");
       if (!(file instanceof Blob)) {
-        return NextResponse.json({ error: "multipart body must include a `file` field" }, { status: 400 });
+        return NextResponse.json(
+          { error: "multipart body must include a `file` field" },
+          { status: 400 },
+        );
       }
       if (file.size > MAX_BYTES) {
         return NextResponse.json({ error: "File exceeds the 5 MB import limit" }, { status: 413 });
@@ -52,7 +60,11 @@ export async function POST(req: Request) {
   }
   if (!text.trim()) return NextResponse.json({ error: "Empty upload" }, { status: 400 });
 
-  const parsed = parseParcels(text, filename, contentType.includes("multipart") ? undefined : contentType);
+  const parsed = parseParcels(
+    text,
+    filename,
+    contentType.includes("multipart") ? undefined : contentType,
+  );
   if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
   const { rows, duplicates } = dedupeParcels(parsed.rows);
@@ -88,7 +100,7 @@ export async function POST(req: Request) {
       if (error) {
         return NextResponse.json(
           { error: `Batch ${i / BATCH + 1} failed: ${error.message}`, imported: i },
-          { status: 500 }
+          { status: 500 },
         );
       }
     }
@@ -101,14 +113,19 @@ export async function POST(req: Request) {
     eventType: "property.imported",
     subjectType: "property",
     subjectId: null,
-    detail: { new: summary.new, updated: summary.updated, invalid: invalid.length, filename: filename ?? null },
+    detail: {
+      new: summary.new,
+      updated: summary.updated,
+      invalid: invalid.length,
+      filename: filename ?? null,
+    },
   });
   return NextResponse.json(summary);
 }
 
 async function existingParcelIds(
   rows: ParsedParcel[],
-  db: ReturnType<typeof getServiceSupabase>
+  db: ReturnType<typeof getServiceSupabase>,
 ): Promise<Set<string>> {
   const ids = rows.map((r) => r.parcel_id);
   const found = new Set<string>();

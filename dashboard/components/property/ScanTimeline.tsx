@@ -14,7 +14,8 @@ interface Series {
 }
 
 function lowAlignment(s: PropertyScan): boolean {
-  const details = (s.raw_metrics as { details?: { low_alignment?: unknown } } | null | undefined)?.details;
+  const details = (s.raw_metrics as { details?: { low_alignment?: unknown } } | null | undefined)
+    ?.details;
   if (details && typeof details.low_alignment === "boolean") return details.low_alignment;
   return s.alignment_quality != null && s.alignment_quality < 0.5;
 }
@@ -31,7 +32,7 @@ function mean(xs: number[]): number | null {
 export function ScanTimeline({ scans }: { scans: PropertyScan[] }) {
   // Oldest -> newest along x.
   const ordered = [...scans].sort((a, b) =>
-    (a.flight?.flown_at ?? a.processed_at).localeCompare(b.flight?.flown_at ?? b.processed_at)
+    (a.flight?.flown_at ?? a.processed_at).localeCompare(b.flight?.flown_at ?? b.processed_at),
   );
   if (ordered.length === 0) return null;
 
@@ -87,13 +88,21 @@ export function ScanTimeline({ scans }: { scans: PropertyScan[] }) {
   return (
     <section className="space-y-4 rounded-xl border border-surface-border bg-surface-raised p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Scan history</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Scan history
+        </p>
         <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400">
           <span>
-            <span className="text-slate-100 tabular-nums">{ordered.length}</span> weeks observed
+            <span className="tabular-nums text-slate-100">{ordered.length}</span> weeks observed
           </span>
           <span>
-            <span className={weeksOver > 0 ? "text-amber-300 tabular-nums" : "text-slate-100 tabular-nums"}>{weeksOver}</span>{" "}
+            <span
+              className={
+                weeksOver > 0 ? "tabular-nums text-amber-300" : "tabular-nums text-slate-100"
+              }
+            >
+              {weeksOver}
+            </span>{" "}
             over threshold
           </span>
           <span className="flex items-center gap-1">
@@ -119,17 +128,31 @@ export function ScanTimeline({ scans }: { scans: PropertyScan[] }) {
 
       <div className="grid gap-3 sm:grid-cols-2">
         {series.map((s) => (
-          <Sparkline key={s.key} series={s} hollow={hollow} labels={ordered.map((o) => o.flight?.flight_code ?? "")} />
+          <Sparkline
+            key={s.key}
+            series={s}
+            hollow={hollow}
+            labels={ordered.map((o) => o.flight?.flight_code ?? "")}
+          />
         ))}
       </div>
       <p className="text-[10px] text-slate-500">
-        Hollow points: low alignment frame (score is unreliable). Dashed line: auto-flag threshold / zero line.
+        Hollow points: low alignment frame (score is unreliable). Dashed line: auto-flag threshold /
+        zero line.
       </p>
     </section>
   );
 }
 
-function Sparkline({ series, hollow, labels }: { series: Series; hollow: boolean[]; labels: string[] }) {
+function Sparkline({
+  series,
+  hollow,
+  labels,
+}: {
+  series: Series;
+  hollow: boolean[];
+  labels: string[];
+}) {
   const W = 260;
   const H = 64;
   const padX = 8;
@@ -143,16 +166,25 @@ function Sparkline({ series, hollow, labels }: { series: Series; hollow: boolean
   const points = series.values
     .map((v, i) => (v == null ? null : ([x(i), y(v), i] as const)))
     .filter((p): p is readonly [number, number, number] => p !== null);
-  const path = points.map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
+  const path = points
+    .map((p, i) => `${i === 0 ? "M" : "L"}${p[0].toFixed(1)},${p[1].toFixed(1)}`)
+    .join(" ");
   const latest = [...series.values].reverse().find((v) => v != null) ?? null;
 
   return (
     <div className="rounded-lg border border-surface-border bg-surface p-3">
       <div className="flex items-baseline justify-between">
         <p className="text-[10px] uppercase tracking-wide text-slate-500">{series.label}</p>
-        <p className="text-sm font-semibold text-white tabular-nums">{latest == null ? "—" : series.format(latest)}</p>
+        <p className="text-sm font-semibold tabular-nums text-white">
+          {latest == null ? "—" : series.format(latest)}
+        </p>
       </div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 h-16 w-full" role="img" aria-label={`${series.label} over time`}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="mt-1 h-16 w-full"
+        role="img"
+        aria-label={`${series.label} over time`}
+      >
         {series.reference !== undefined && (
           <line
             x1={0}

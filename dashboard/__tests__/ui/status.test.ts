@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AIRBORNE_STATES,
-  DRONE_STATE,
-  LEAD_STATUS,
-  MISSION_STATUS,
-} from "../../lib/ui/status";
+import { AIRBORNE_STATES, DRONE_STATE, LEAD_STATUS, MISSION_STATUS } from "../../lib/ui/status";
 
 const HEX = /^#[0-9a-f]{6}$/;
 

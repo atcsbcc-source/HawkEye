@@ -33,7 +33,7 @@ export function Header({ actions }: { actions?: React.ReactNode }) {
                 {isLeaf ? (
                   <span
                     aria-current="page"
-                    className="truncate normal-case tracking-normal text-sm font-semibold text-white"
+                    className="truncate text-sm font-semibold normal-case tracking-normal text-white"
                     title={label}
                   >
                     {label}

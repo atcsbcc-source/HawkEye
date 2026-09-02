@@ -44,7 +44,10 @@ describe("csvEscape", () => {
 
 describe("leadsToCsv", () => {
   it("emits the header and one escaped row per lead with an absolute detail_url", () => {
-    const csv = leadsToCsv([lead({ address: 'Unit "B", 12 Oak St' })], "https://hawkeye.example.com/");
+    const csv = leadsToCsv(
+      [lead({ address: 'Unit "B", 12 Oak St' })],
+      "https://hawkeye.example.com/",
+    );
     const lines = csv.split("\r\n");
     expect(lines[0]).toBe(LEAD_EXPORT_COLUMNS.join(","));
     expect(lines[1]).toContain('"Unit ""B"", 12 Oak St"');
@@ -58,8 +61,15 @@ describe("leadsToCsv", () => {
 
   it("renders nulls as empty fields", () => {
     const csv = leadsToCsv(
-      [lead({ neighborhood: null, verification: null, days_distressed: null, latest_scan_at: null })],
-      "http://localhost:3000"
+      [
+        lead({
+          neighborhood: null,
+          verification: null,
+          days_distressed: null,
+          latest_scan_at: null,
+        }),
+      ],
+      "http://localhost:3000",
     );
     const row = csv.split("\r\n")[1];
     expect(row).toContain(",-80.8431,,flagged,,,91,");
@@ -92,7 +102,11 @@ describe("filterLeads", () => {
 
 describe("exportFileName", () => {
   it("dates the file", () => {
-    expect(exportFileName("csv", new Date("2026-09-02T15:00:00Z"))).toBe("hawkeye-leads-2026-09-02.csv");
-    expect(exportFileName("geojson", new Date("2026-09-02T15:00:00Z"))).toBe("hawkeye-leads-2026-09-02.geojson");
+    expect(exportFileName("csv", new Date("2026-09-02T15:00:00Z"))).toBe(
+      "hawkeye-leads-2026-09-02.csv",
+    );
+    expect(exportFileName("geojson", new Date("2026-09-02T15:00:00Z"))).toBe(
+      "hawkeye-leads-2026-09-02.geojson",
+    );
   });
 });

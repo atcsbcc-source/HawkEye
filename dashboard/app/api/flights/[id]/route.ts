@@ -40,7 +40,9 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   const parsed = PatchSchema.safeParse(body);
   if (!parsed.success) {
-    const error = parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
+    const error = parsed.error.issues
+      .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+      .join("; ");
     return NextResponse.json({ error }, { status: 400 });
   }
   const patch: Record<string, unknown> = { ...parsed.data };
@@ -53,7 +55,12 @@ export async function PATCH(req: Request, { params }: Params) {
   const db = getServiceSupabase();
   let flight: unknown;
   if (db) {
-    const { data, error } = await db.from("flights").update(patch).eq("id", params.id).select().maybeSingle();
+    const { data, error } = await db
+      .from("flights")
+      .update(patch)
+      .eq("id", params.id)
+      .select()
+      .maybeSingle();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) return NextResponse.json({ error: "Flight not found" }, { status: 404 });
     flight = data;
@@ -84,8 +91,10 @@ export async function DELETE(req: Request, { params }: Params) {
   const confirm = new URL(req.url).searchParams.get("confirm");
   if (confirm !== flight.flight_code) {
     return NextResponse.json(
-      { error: `Deleting a flight removes all of its scans. Repeat the request with ?confirm=${flight.flight_code}` },
-      { status: 400 }
+      {
+        error: `Deleting a flight removes all of its scans. Repeat the request with ?confirm=${flight.flight_code}`,
+      },
+      { status: 400 },
     );
   }
 

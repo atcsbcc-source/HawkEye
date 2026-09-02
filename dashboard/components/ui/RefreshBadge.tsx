@@ -21,7 +21,7 @@ export function RefreshBadge({
       <span
         className={clsx(
           "inline-flex items-center gap-1 font-mono text-label uppercase text-emerald-300",
-          className
+          className,
         )}
       >
         <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -34,7 +34,7 @@ export function RefreshBadge({
       role="status"
       className={clsx(
         "inline-flex items-center gap-1 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 font-mono text-label uppercase text-red-300",
-        className
+        className,
       )}
       title={lastOk ? `Last successful refresh ${fmtTime(lastOk)}` : "No successful refresh yet"}
     >

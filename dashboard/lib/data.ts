@@ -67,7 +67,7 @@ export async function fetchScans(propertyId: string): Promise<PropertyScan[]> {
       image_url_previous: s.image_url_previous ? await signUrl(s.image_url_previous) : null,
       image_url_diff: s.image_url_diff ? await signUrl(s.image_url_diff) : null,
       raw_metrics: s.raw_metrics ?? null,
-    }))
+    })),
   );
 }
 
@@ -98,7 +98,10 @@ export async function fetchVerifications(propertyId: string): Promise<PropertyVe
 // ---------------------------------------------------------------------------
 // Flights
 // ---------------------------------------------------------------------------
-type ScanLite = Pick<PropertyScan, "property_id" | "flight_id" | "vacancy_confidence" | "alignment_quality"> & {
+type ScanLite = Pick<
+  PropertyScan,
+  "property_id" | "flight_id" | "vacancy_confidence" | "alignment_quality"
+> & {
   flown_at: string;
 };
 
@@ -162,7 +165,9 @@ export async function fetchFlights(): Promise<FlightSummary[]> {
     db.from("flights").select("*").order("flown_at", { ascending: false }),
     db
       .from("property_scans")
-      .select("property_id, flight_id, vacancy_confidence, alignment_quality, flight:flights(flown_at)"),
+      .select(
+        "property_id, flight_id, vacancy_confidence, alignment_quality, flight:flights(flown_at)",
+      ),
   ]);
   const lite: ScanLite[] = ((scans ?? []) as any[]).map((s) => ({
     property_id: s.property_id,
@@ -184,8 +189,10 @@ export async function fetchFlight(id: string): Promise<Flight | null> {
 /** Scans produced by one flight, highest confidence first, with the parcel
  *  attached as `property` for linking. */
 export async function fetchFlightScans(
-  flightId: string
-): Promise<(PropertyScan & { property?: Pick<PropertyLead, "id" | "address" | "parcel_id" | "status"> })[]> {
+  flightId: string,
+): Promise<
+  (PropertyScan & { property?: Pick<PropertyLead, "id" | "address" | "parcel_id" | "status"> })[]
+> {
   const db = getSupabase();
   if (!db) {
     return mockAllScans()

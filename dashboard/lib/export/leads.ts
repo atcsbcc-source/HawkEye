@@ -32,8 +32,10 @@ export interface LeadFilter {
 export function filterLeads(leads: PropertyLead[], f: LeadFilter): PropertyLead[] {
   return leads.filter((l) => {
     if (f.status && l.status !== f.status) return false;
-    if (f.neighborhood && (l.neighborhood ?? "").toLowerCase() !== f.neighborhood.toLowerCase()) return false;
-    if (f.minDays != null && Number.isFinite(f.minDays) && (l.days_distressed ?? -1) < f.minDays) return false;
+    if (f.neighborhood && (l.neighborhood ?? "").toLowerCase() !== f.neighborhood.toLowerCase())
+      return false;
+    if (f.minDays != null && Number.isFinite(f.minDays) && (l.days_distressed ?? -1) < f.minDays)
+      return false;
     return true;
   });
 }

@@ -6,7 +6,9 @@ export function FlightTable({ flights }: { flights: FlightSummary[] }) {
   return (
     <section className="rounded-xl border border-surface-border bg-surface-raised">
       <div className="border-b border-surface-border p-4">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Flights</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+          Flights
+        </p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
@@ -25,22 +27,36 @@ export function FlightTable({ flights }: { flights: FlightSummary[] }) {
           </thead>
           <tbody>
             {flights.map((f) => (
-              <tr key={f.id} className="border-b border-surface-border/60 transition hover:bg-surface">
+              <tr
+                key={f.id}
+                className="border-b border-surface-border/60 transition hover:bg-surface"
+              >
                 <td className="px-4 py-3">
-                  <Link href={`/flights/${f.id}`} className="font-mono text-white hover:text-sky-400">
+                  <Link
+                    href={`/flights/${f.id}`}
+                    className="font-mono text-white hover:text-sky-400"
+                  >
                     {f.flight_code}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-slate-300">{new Date(f.flown_at).toLocaleDateString()}</td>
+                <td className="px-4 py-3 text-slate-300">
+                  {new Date(f.flown_at).toLocaleDateString()}
+                </td>
                 <td className="px-4 py-3 text-slate-300">{f.neighborhood}</td>
                 <td className="px-4 py-3 text-xs text-slate-400">{f.drone_model}</td>
-                <td className="px-4 py-3 text-right tabular-nums text-slate-300">{f.altitude_m ?? "—"}</td>
+                <td className="px-4 py-3 text-right tabular-nums text-slate-300">
+                  {f.altitude_m ?? "—"}
+                </td>
                 <td className="px-4 py-3 text-right tabular-nums text-slate-300">
                   {f.gsd_cm_per_px != null ? `${Number(f.gsd_cm_per_px).toFixed(2)} cm` : "—"}
                 </td>
                 <td className="px-4 py-3 text-right tabular-nums text-slate-300">{f.scan_count}</td>
                 <td className="px-4 py-3 text-right tabular-nums">
-                  <span className={f.newly_flagged > 0 ? "font-semibold text-amber-300" : "text-slate-400"}>
+                  <span
+                    className={
+                      f.newly_flagged > 0 ? "font-semibold text-amber-300" : "text-slate-400"
+                    }
+                  >
                     {f.newly_flagged}
                   </span>
                 </td>

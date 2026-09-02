@@ -10,8 +10,18 @@ export const dynamic = "force-dynamic";
 const PatchSchema = z
   .object({
     address: z.string().trim().min(1).max(200).optional(),
-    lat: z.coerce.number().refine(Number.isFinite, "lat must be a number").min(-90).max(90).optional(),
-    lng: z.coerce.number().refine(Number.isFinite, "lng must be a number").min(-180).max(180).optional(),
+    lat: z.coerce
+      .number()
+      .refine(Number.isFinite, "lat must be a number")
+      .min(-90)
+      .max(90)
+      .optional(),
+    lng: z.coerce
+      .number()
+      .refine(Number.isFinite, "lng must be a number")
+      .min(-180)
+      .max(180)
+      .optional(),
     neighborhood: z.string().trim().max(80).nullable().optional(),
     notes: z.string().trim().max(2000).nullable().optional(),
   })
@@ -35,7 +45,9 @@ export async function PATCH(req: Request, { params }: Params) {
   }
   const parsed = PatchSchema.safeParse(body);
   if (!parsed.success) {
-    const error = parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
+    const error = parsed.error.issues
+      .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+      .join("; ");
     return NextResponse.json({ error }, { status: 400 });
   }
   const patch: Record<string, unknown> = { ...parsed.data };

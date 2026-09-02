@@ -28,8 +28,7 @@ export default async function LoginPage({
         {dev ? (
           <div className="flex flex-col gap-3">
             <p className="rounded-md border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
-              DEV MODE: auth disabled, mock data. Set NEXT_PUBLIC_SUPABASE_URL to enable
-              sign-in.
+              DEV MODE: auth disabled, mock data. Set NEXT_PUBLIC_SUPABASE_URL to enable sign-in.
             </p>
             <Link href="/" className="text-sm text-amber-400 hover:underline">
               Continue to the console →

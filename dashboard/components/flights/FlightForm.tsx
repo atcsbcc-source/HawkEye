@@ -19,7 +19,9 @@ export function FlightForm({
   const router = useRouter();
   const today = new Date().toISOString().slice(0, 10);
   const [flownAt, setFlownAt] = useState(today);
-  const [neighborhood, setNeighborhood] = useState(defaultNeighborhood ?? neighborhoods[0] ?? "Oakwood");
+  const [neighborhood, setNeighborhood] = useState(
+    defaultNeighborhood ?? neighborhoods[0] ?? "Oakwood",
+  );
   const [code, setCode] = useState("");
   const [codeTouched, setCodeTouched] = useState(false);
   const [altitude, setAltitude] = useState("90");
@@ -67,11 +69,22 @@ export function FlightForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">New flight</p>
+    <form
+      onSubmit={submit}
+      className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4"
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+        New flight
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Flown on">
-          <input type="date" className={input} value={flownAt} onChange={(e) => setFlownAt(e.target.value)} required />
+          <input
+            type="date"
+            className={input}
+            value={flownAt}
+            onChange={(e) => setFlownAt(e.target.value)}
+            required
+          />
         </Field>
         <Field label="Neighborhood">
           <input
@@ -101,17 +114,32 @@ export function FlightForm({
       </Field>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Altitude (m AGL)">
-          <input className={input} value={altitude} onChange={(e) => setAltitude(e.target.value)} inputMode="decimal" />
+          <input
+            className={input}
+            value={altitude}
+            onChange={(e) => setAltitude(e.target.value)}
+            inputMode="decimal"
+          />
         </Field>
         <Field label="GSD (cm/px)">
-          <input className={input} value={gsd} onChange={(e) => setGsd(e.target.value)} inputMode="decimal" />
+          <input
+            className={input}
+            value={gsd}
+            onChange={(e) => setGsd(e.target.value)}
+            inputMode="decimal"
+          />
         </Field>
         <Field label="Aircraft">
           <input className={input} value={drone} onChange={(e) => setDrone(e.target.value)} />
         </Field>
       </div>
       <Field label="Notes">
-        <input className={input} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Weather, re-flown parcels…" />
+        <input
+          className={input}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Weather, re-flown parcels…"
+        />
       </Field>
       {error && <p className="text-xs text-red-400">{error}</p>}
       <button
@@ -119,7 +147,11 @@ export function FlightForm({
         disabled={state === "saving"}
         className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
       >
-        {state === "saving" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plane className="h-4 w-4" />}
+        {state === "saving" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Plane className="h-4 w-4" />
+        )}
         Create flight
       </button>
     </form>

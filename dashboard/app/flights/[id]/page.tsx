@@ -16,7 +16,8 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
   if (!flight) notFound();
 
   const idx = all.findIndex((f) => f.id === flight.id);
-  const previous = idx >= 0 ? all.slice(idx + 1).find((f) => f.neighborhood === flight.neighborhood) : undefined;
+  const previous =
+    idx >= 0 ? all.slice(idx + 1).find((f) => f.neighborhood === flight.neighborhood) : undefined;
   const summary = all[idx];
   const gsd = flight.gsd_cm_per_px != null ? Number(flight.gsd_cm_per_px) : 2.5;
 
@@ -33,7 +34,10 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
 
   return (
     <div className="space-y-6">
-      <Link href="/flights" className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white">
+      <Link
+        href="/flights"
+        className="inline-flex items-center gap-2 text-sm text-slate-400 transition hover:text-white"
+      >
         <ArrowLeft className="h-4 w-4" /> All flights
       </Link>
 
@@ -42,8 +46,8 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
           <h2 className="font-mono text-2xl font-semibold text-white">{flight.flight_code}</h2>
           <p className="mt-1 flex items-center gap-2 text-sm text-slate-400">
             <Plane className="h-4 w-4" />
-            {new Date(flight.flown_at).toLocaleDateString(undefined, { dateStyle: "long" })} · {flight.neighborhood} ·{" "}
-            {flight.drone_model}
+            {new Date(flight.flown_at).toLocaleDateString(undefined, { dateStyle: "long" })} ·{" "}
+            {flight.neighborhood} · {flight.drone_model}
             {flight.altitude_m != null && ` · ${flight.altitude_m} m AGL`}
             {flight.gsd_cm_per_px != null && ` · ${Number(flight.gsd_cm_per_px).toFixed(2)} cm/px`}
           </p>
@@ -52,8 +56,15 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
         {summary && (
           <div className="grid grid-cols-3 gap-3 text-center">
             <Stat label="Scans" value={String(summary.scan_count)} />
-            <Stat label="Newly flagged" value={String(summary.newly_flagged)} accent={summary.newly_flagged > 0} />
-            <Stat label="Mean align." value={summary.mean_alignment == null ? "—" : summary.mean_alignment.toFixed(2)} />
+            <Stat
+              label="Newly flagged"
+              value={String(summary.newly_flagged)}
+              accent={summary.newly_flagged > 0}
+            />
+            <Stat
+              label="Mean align."
+              value={summary.mean_alignment == null ? "—" : summary.mean_alignment.toFixed(2)}
+            />
           </div>
         )}
       </div>
@@ -61,7 +72,9 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
       <div className="grid gap-4 xl:grid-cols-3">
         <section className="rounded-xl border border-surface-border bg-surface-raised xl:col-span-2">
           <div className="border-b border-surface-border p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Parcels scanned</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Parcels scanned
+            </p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -77,7 +90,10 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
               </thead>
               <tbody>
                 {scans.map((s) => (
-                  <tr key={s.id} className="border-b border-surface-border/60 transition hover:bg-surface">
+                  <tr
+                    key={s.id}
+                    className="border-b border-surface-border/60 transition hover:bg-surface"
+                  >
                     <td className="px-4 py-3">
                       <Link href={`/properties/${s.property_id}`} className="group">
                         <p className="font-medium text-white group-hover:text-sky-400">
@@ -91,7 +107,13 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                       </Link>
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
-                      <span className={s.vacancy_confidence >= 75 ? "font-semibold text-amber-300" : "text-slate-300"}>
+                      <span
+                        className={
+                          s.vacancy_confidence >= 75
+                            ? "font-semibold text-amber-300"
+                            : "text-slate-300"
+                        }
+                      >
                         {s.vacancy_confidence}
                       </span>
                     </td>
@@ -108,7 +130,11 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                       {s.alignment_quality == null ? (
                         <span className="text-slate-500">—</span>
                       ) : (
-                        <span className={Number(s.alignment_quality) < 0.5 ? "text-red-300" : "text-slate-300"}>
+                        <span
+                          className={
+                            Number(s.alignment_quality) < 0.5 ? "text-red-300" : "text-slate-300"
+                          }
+                        >
                           {Number(s.alignment_quality).toFixed(2)}
                         </span>
                       )}
@@ -128,7 +154,9 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
         </section>
 
         <section className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">Ingest checklist</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+            Ingest checklist
+          </p>
           <ol className="space-y-3 text-xs text-slate-300">
             <li>
               <p className="text-slate-400">1. Export the stitched ortho as GeoTIFF to</p>
@@ -138,7 +166,10 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
             </li>
             <li>
               <p className="text-slate-400">
-                2. Crop every tracked parcel{previous ? ` (paired with ${previous.flight_code})` : " (first flight — no previous pairing)"}
+                2. Crop every tracked parcel
+                {previous
+                  ? ` (paired with ${previous.flight_code})`
+                  : " (first flight — no previous pairing)"}
               </p>
               <pre className="mt-1 overflow-x-auto rounded-lg border border-surface-border bg-surface p-3 font-mono text-[11px] leading-relaxed text-slate-200">
                 {`cd pipeline\n${cropCmd}`}
@@ -151,8 +182,12 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
               </pre>
             </li>
             <li className="text-slate-500">
-              4. Refresh this page — scans, newly-flagged and mean alignment update as rows land. Then run the distress
-              sweep from <Link href="/automation" className="text-sky-300 hover:underline">Automation</Link>.
+              4. Refresh this page — scans, newly-flagged and mean alignment update as rows land.
+              Then run the distress sweep from{" "}
+              <Link href="/automation" className="text-sky-300 hover:underline">
+                Automation
+              </Link>
+              .
             </li>
           </ol>
         </section>
@@ -165,7 +200,13 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
   return (
     <div className="rounded-lg border border-surface-border bg-surface px-3 py-2">
       <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={accent ? "mt-0.5 text-lg font-semibold text-amber-300 tabular-nums" : "mt-0.5 text-lg font-semibold text-white tabular-nums"}>
+      <p
+        className={
+          accent
+            ? "mt-0.5 text-lg font-semibold tabular-nums text-amber-300"
+            : "mt-0.5 text-lg font-semibold tabular-nums text-white"
+        }
+      >
         {value}
       </p>
     </div>

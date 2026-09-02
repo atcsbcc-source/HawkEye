@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type KeyboardEvent,
-} from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import {
@@ -117,11 +110,9 @@ export function CompareViewer({
   const oldest = scans[scans.length - 1];
   const baselineUrl = oldest.image_url_previous ?? oldest.image_url_current;
   const baselineWeek = weekTag(oldest.flight?.flight_code);
-  const baselineLabel = oldest.flight
-    ? `${oldest.flight.flight_code} · baseline`
-    : "Baseline";
+  const baselineLabel = oldest.flight ? `${oldest.flight.flight_code} · baseline` : "Baseline";
   const baselineShort = `BASELINE${baselineWeek ? ` · ${baselineWeek}` : ""} · ${fmtDate(
-    oldest.flight?.flown_at ?? oldest.processed_at
+    oldest.flight?.flown_at ?? oldest.processed_at,
   )}`;
   const selectedShort = chipLabel(selected).toUpperCase();
   const diffAvailable = Boolean(selected.image_url_diff);
@@ -158,7 +149,7 @@ export function CompareViewer({
                 "btn h-8 gap-1.5 border px-2.5 font-mono text-xs",
                 i === scanIdx
                   ? "border-sky-500 bg-sky-500/10 text-sky-200"
-                  : "border-surface-border text-slate-400 hover:text-white"
+                  : "border-surface-border text-slate-400 hover:text-white",
               )}
             >
               {chipLabel(s)}
@@ -189,7 +180,9 @@ export function CompareViewer({
                 onClick={() => setMode(m.id)}
                 className={clsx(
                   "h-7 rounded-md px-2.5 transition disabled:cursor-not-allowed disabled:opacity-40",
-                  effectiveMode === m.id ? "bg-sky-700 text-white" : "text-slate-400 hover:text-white"
+                  effectiveMode === m.id
+                    ? "bg-sky-700 text-white"
+                    : "text-slate-400 hover:text-white",
                 )}
               >
                 {m.label}
@@ -240,7 +233,7 @@ export function CompareViewer({
               onKeyDown={onSliderKey}
               aria-label="Comparison split"
               aria-valuetext={`${split}% of frame shows ${baselineLabel}`}
-              className="absolute inset-0 h-full w-full cursor-ew-resize opacity-0 accent-amber-400 focus-visible:opacity-100 focus-visible:ring-0 focus-visible:ring-offset-0"
+              className="absolute inset-0 h-full w-full cursor-ew-resize accent-amber-400 opacity-0 focus-visible:opacity-100 focus-visible:ring-0 focus-visible:ring-offset-0"
             />
             <FrameLabel side="left">{baselineShort}</FrameLabel>
             <FrameLabel side="right">{selectedShort}</FrameLabel>
@@ -377,7 +370,7 @@ function FrameLabel({ side, children }: { side: "left" | "right"; children: Reac
     <span
       className={clsx(
         "pointer-events-none absolute top-3 rounded bg-black/70 px-2 py-1 font-mono text-[11px] tracking-wider text-slate-200",
-        side === "left" ? "left-3" : "right-3"
+        side === "left" ? "left-3" : "right-3",
       )}
     >
       {children}
@@ -454,7 +447,7 @@ export function DispatchCard({
       setState("sent");
       if (body.forwarded === false) {
         toast.info(
-          `Marked ${label} dispatched — CRM_WEBHOOK_URL is not set, so nothing was forwarded.`
+          `Marked ${label} dispatched — CRM_WEBHOOK_URL is not set, so nothing was forwarded.`,
         );
       } else {
         toast.success(`Dispatched ${label} to CRM`);
@@ -490,12 +483,7 @@ export function DispatchCard({
           <CheckCircle2 className="h-4 w-4" aria-hidden /> Dispatched
         </div>
       ) : state === "confirm" ? (
-        <button
-          type="button"
-          onClick={send}
-          className="btn-danger w-full"
-          aria-live="polite"
-        >
+        <button type="button" onClick={send} className="btn-danger w-full" aria-live="polite">
           <Send className="h-4 w-4" aria-hidden /> Confirm dispatch ({countdown}s)
         </button>
       ) : (
@@ -520,7 +508,11 @@ export function DispatchCard({
           className="flex items-start justify-between gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300"
         >
           <span className="min-w-0 break-words">{errorMsg}</span>
-          <button type="button" onClick={send} className="btn-ghost h-6 shrink-0 px-1.5 text-red-200">
+          <button
+            type="button"
+            onClick={send}
+            className="btn-ghost h-6 shrink-0 px-1.5 text-red-200"
+          >
             <RefreshCw className="h-3 w-3" aria-hidden /> Retry
           </button>
         </div>

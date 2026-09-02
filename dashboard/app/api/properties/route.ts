@@ -54,15 +54,15 @@ export async function POST(req: Request) {
     if (existing) {
       return NextResponse.json(
         { error: `A property with parcel_id ${input.parcel_id} already exists`, id: existing.id },
-        { status: 409 }
+        { status: 409 },
       );
     }
     const { data, error } = await db.from("properties").insert(input).select().single();
     if (error || !data) {
       const dup = error?.code === "23505";
       return NextResponse.json(
-        { error: dup ? "Duplicate parcel_id" : error?.message ?? "Insert failed" },
-        { status: dup ? 409 : 500 }
+        { error: dup ? "Duplicate parcel_id" : (error?.message ?? "Insert failed") },
+        { status: dup ? 409 : 500 },
       );
     }
     property = data;
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
     if (mockFindByParcel(input.parcel_id)) {
       return NextResponse.json(
         { error: `A property with parcel_id ${input.parcel_id} already exists` },
-        { status: 409 }
+        { status: 409 },
       );
     }
     property = mockCreateProperty(input) as unknown as Record<string, unknown>;
@@ -81,7 +81,11 @@ export async function POST(req: Request) {
     eventType: "property.created",
     subjectType: "property",
     subjectId: String(property.id),
-    detail: { parcel_id: input.parcel_id, address: input.address, neighborhood: input.neighborhood },
+    detail: {
+      parcel_id: input.parcel_id,
+      address: input.address,
+      neighborhood: input.neighborhood,
+    },
   });
   return NextResponse.json({ property }, { status: 201 });
 }

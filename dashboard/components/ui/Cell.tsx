@@ -49,7 +49,7 @@ export function Cell({
       className={clsx(
         "min-w-0 rounded-lg border border-surface-border bg-surface px-2 py-1.5 transition",
         dim && "opacity-60 grayscale",
-        className
+        className,
       )}
     >
       <div className="kicker flex items-center gap-1 normal-case tracking-[0.14em]">
@@ -57,9 +57,7 @@ export function Cell({
         <span className="truncate uppercase">{label}</span>
       </div>
       {value !== undefined && (
-        <p className={clsx("truncate font-mono text-sm tabular-nums", VALUE_TONE[tone])}>
-          {value}
-        </p>
+        <p className={clsx("truncate font-mono text-sm tabular-nums", VALUE_TONE[tone])}>{value}</p>
       )}
       {children}
       {bar && (

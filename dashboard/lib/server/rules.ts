@@ -81,7 +81,10 @@ export async function listRules(): Promise<AutomationRule[]> {
 }
 
 export async function createRule(
-  rule: Pick<AutomationRule, "name" | "triggerType" | "triggerConfig" | "actionType" | "actionConfig">,
+  rule: Pick<
+    AutomationRule,
+    "name" | "triggerType" | "triggerConfig" | "actionType" | "actionConfig"
+  >,
 ): Promise<AutomationRule> {
   const db = getServiceSupabase();
   let created: AutomationRule;

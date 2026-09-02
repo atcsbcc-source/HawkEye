@@ -112,7 +112,9 @@ export function mockUpsertProperty(input: NewPropertyInput): { id: string; creat
 
 export function mockUpdateProperty(
   id: string,
-  patch: Partial<Pick<PropertyLead, "address" | "lat" | "lng" | "neighborhood" | "notes" | "status">>
+  patch: Partial<
+    Pick<PropertyLead, "address" | "lat" | "lng" | "neighborhood" | "notes" | "status">
+  >,
 ): PropertyLead | null {
   const p = store().properties.find((x) => x.id === id);
   if (!p) return null;
@@ -205,7 +207,7 @@ export function mockCreateFlight(input: Omit<Flight, "id" | "created_at">): Flig
 
 export function mockUpdateFlight(
   id: string,
-  patch: Partial<Omit<Flight, "id" | "created_at">>
+  patch: Partial<Omit<Flight, "id" | "created_at">>,
 ): Flight | null {
   const f = store().flights.find((x) => x.id === id);
   if (!f) return null;

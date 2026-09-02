@@ -93,7 +93,7 @@ export function OpsConsole({ leads }: { leads: PropertyLead[] }) {
       const t = Date.now();
       setNow(t);
       setLink((prev) =>
-        frameAt !== null && prev !== "connecting" && t - frameAt > STALE_MS ? "stale" : prev
+        frameAt !== null && prev !== "connecting" && t - frameAt > STALE_MS ? "stale" : prev,
       );
     }, 1000);
     return () => clearInterval(iv);
@@ -123,7 +123,7 @@ export function OpsConsole({ leads }: { leads: PropertyLead[] }) {
 
   const activeMission = useMemo(
     () => missions?.find((m) => m.status === "active") ?? null,
-    [missions]
+    [missions],
   );
 
   async function createMission() {
@@ -164,7 +164,9 @@ export function OpsConsole({ leads }: { leads: PropertyLead[] }) {
       if (!res.ok) {
         toast.error(await readError(res, `Mission ${action} failed (HTTP ${res.status})`));
       } else {
-        toast.success(action === "launch" ? "Mission launched" : "Abort sent — aircraft returning to base");
+        toast.success(
+          action === "launch" ? "Mission launched" : "Abort sent — aircraft returning to base",
+        );
       }
     } catch {
       toast.error(`Network error — mission ${action} not sent.`);

@@ -34,7 +34,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
   const parsed = VerifySchema.safeParse(body);
   if (!parsed.success) {
-    const error = parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; ");
+    const error = parsed.error.issues
+      .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
+      .join("; ");
     return NextResponse.json({ error }, { status: 400 });
   }
   const { verdict } = parsed.data;
@@ -68,7 +70,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
     verification = v;
 
-    const patch: Record<string, unknown> = { verification: verdict, verified_at: now.toISOString() };
+    const patch: Record<string, unknown> = {
+      verification: verdict,
+      verified_at: now.toISOString(),
+    };
     if (demote) {
       patch.status = "active";
       patch.first_flagged_at = null;

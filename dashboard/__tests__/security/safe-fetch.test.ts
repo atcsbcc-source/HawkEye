@@ -68,7 +68,7 @@ describe("assertSafeWebhookUrlSync", () => {
 
   it("rejects URLs over 2048 chars", () => {
     expect(() => assertSafeWebhookUrlSync(`https://example.com/${"a".repeat(2048)}`)).toThrow(
-      WebhookError
+      WebhookError,
     );
   });
 

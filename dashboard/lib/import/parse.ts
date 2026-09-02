@@ -50,7 +50,7 @@ export const ParcelRowSchema = z.object({
 
 export function validateParcel(
   raw: Record<string, unknown>,
-  row: number
+  row: number,
 ): { ok: true; value: ParsedParcel } | { ok: false; reason: string } {
   const res = ParcelRowSchema.safeParse(raw);
   if (!res.success) {
@@ -145,7 +145,10 @@ const HEADER_ALIASES: Record<string, string> = {
 };
 
 function normalizeHeader(h: string): string | null {
-  const key = h.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const key = h
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
   return HEADER_ALIASES[key] ?? null;
 }
 
@@ -261,14 +264,20 @@ export function parseGeoJson(input: unknown): ParseResult {
     }
   }
   if (!doc || doc.type !== "FeatureCollection" || !Array.isArray(doc.features)) {
-    return { rows: [], invalid: [], error: "GeoJSON must be a FeatureCollection with a features array" };
+    return {
+      rows: [],
+      invalid: [],
+      error: "GeoJSON must be a FeatureCollection with a features array",
+    };
   }
   const rows: ParsedParcel[] = [];
   const invalid: InvalidRow[] = [];
   doc.features.forEach((feature: any, idx: number) => {
     const row = idx + 1;
     const props: Record<string, unknown> =
-      feature && typeof feature.properties === "object" && feature.properties ? feature.properties : {};
+      feature && typeof feature.properties === "object" && feature.properties
+        ? feature.properties
+        : {};
     const pt = geometryPoint(feature?.geometry);
     if (!pt) {
       invalid.push({ row, reason: "geometry: expected Point, Polygon or MultiPolygon" });
@@ -282,9 +291,12 @@ export function parseGeoJson(input: unknown): ParseResult {
       neighborhood: pickProp(props, ["neighborhood", "neighbourhood", "grid"]) ?? null,
       notes: pickProp(props, ["notes", "note"]) ?? null,
     };
-    if (raw.parcel_id !== undefined && typeof raw.parcel_id !== "string") raw.parcel_id = String(raw.parcel_id);
-    if (raw.address !== undefined && typeof raw.address !== "string") raw.address = String(raw.address);
-    if (raw.neighborhood !== null && typeof raw.neighborhood !== "string") raw.neighborhood = String(raw.neighborhood);
+    if (raw.parcel_id !== undefined && typeof raw.parcel_id !== "string")
+      raw.parcel_id = String(raw.parcel_id);
+    if (raw.address !== undefined && typeof raw.address !== "string")
+      raw.address = String(raw.address);
+    if (raw.neighborhood !== null && typeof raw.neighborhood !== "string")
+      raw.neighborhood = String(raw.neighborhood);
     if (raw.notes !== null && typeof raw.notes !== "string") raw.notes = String(raw.notes);
     const res = validateParcel(raw, row);
     if (res.ok) rows.push(res.value);
@@ -296,7 +308,11 @@ export function parseGeoJson(input: unknown): ParseResult {
 // ---------------------------------------------------------------------------
 // Dispatch on content
 // ---------------------------------------------------------------------------
-export function detectFormat(text: string, filename?: string, contentType?: string): "csv" | "geojson" {
+export function detectFormat(
+  text: string,
+  filename?: string,
+  contentType?: string,
+): "csv" | "geojson" {
   const name = (filename ?? "").toLowerCase();
   const ct = (contentType ?? "").toLowerCase();
   if (name.endsWith(".geojson") || name.endsWith(".json") || ct.includes("json")) return "geojson";
@@ -305,16 +321,25 @@ export function detectFormat(text: string, filename?: string, contentType?: stri
 }
 
 export function parseParcels(text: string, filename?: string, contentType?: string): ParseResult {
-  return detectFormat(text, filename, contentType) === "geojson" ? parseGeoJson(text) : parseCsv(text);
+  return detectFormat(text, filename, contentType) === "geojson"
+    ? parseGeoJson(text)
+    : parseCsv(text);
 }
 
 /** De-duplicate on parcel_id (last occurrence wins) and report the dropped rows. */
-export function dedupeParcels(rows: ParsedParcel[]): { rows: ParsedParcel[]; duplicates: InvalidRow[] } {
+export function dedupeParcels(rows: ParsedParcel[]): {
+  rows: ParsedParcel[];
+  duplicates: InvalidRow[];
+} {
   const byId = new Map<string, ParsedParcel>();
   const duplicates: InvalidRow[] = [];
   for (const r of rows) {
     const prev = byId.get(r.parcel_id);
-    if (prev) duplicates.push({ row: prev.row, reason: `duplicate parcel_id ${r.parcel_id} (superseded by row ${r.row})` });
+    if (prev)
+      duplicates.push({
+        row: prev.row,
+        reason: `duplicate parcel_id ${r.parcel_id} (superseded by row ${r.row})`,
+      });
     byId.set(r.parcel_id, r);
   }
   return { rows: Array.from(byId.values()), duplicates };

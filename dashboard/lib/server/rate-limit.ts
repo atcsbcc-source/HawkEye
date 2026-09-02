@@ -41,7 +41,7 @@ export function rateLimit(
   subject: string,
   limit: number,
   windowMs = 60_000,
-  now: number = Date.now()
+  now: number = Date.now(),
 ): RateLimitResult {
   const map = store();
   prune(map, now, windowMs);
@@ -89,12 +89,15 @@ export function clientIp(req: Request): string {
 
 /** 429 response with Retry-After. */
 export function rateLimitResponse(result: RateLimitResult): Response {
-  return new Response(JSON.stringify({ error: "Too many requests", retryAfter: result.retryAfter }), {
-    status: 429,
-    headers: {
-      "content-type": "application/json",
-      "retry-after": String(result.retryAfter),
-      "cache-control": "no-store",
+  return new Response(
+    JSON.stringify({ error: "Too many requests", retryAfter: result.retryAfter }),
+    {
+      status: 429,
+      headers: {
+        "content-type": "application/json",
+        "retry-after": String(result.retryAfter),
+        "cache-control": "no-store",
+      },
     },
-  });
+  );
 }

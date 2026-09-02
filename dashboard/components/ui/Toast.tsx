@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
 
@@ -55,7 +48,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       setItems((prev) => [...prev.slice(-4), { id, kind, message }]);
       window.setTimeout(() => dismiss(id), ttlMs);
     },
-    [dismiss]
+    [dismiss],
   );
 
   const api = useMemo<ToastApi>(
@@ -66,7 +59,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       error: (m) => push("error", m),
       info: (m) => push("info", m),
     }),
-    [push, dismiss]
+    [push, dismiss],
   );
 
   return (
@@ -82,7 +75,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             key={t.id}
             className={clsx(
               "pointer-events-auto flex items-start gap-2 rounded-lg border bg-surface-raised px-3 py-2 text-sm shadow-lg shadow-black/40",
-              TONE[t.kind]
+              TONE[t.kind],
             )}
           >
             {ICON[t.kind]}

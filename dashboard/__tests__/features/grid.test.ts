@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { MAVIC_3_CLASSIC, MAX_ROWS, planGrid, pointInPolygon, type LatLng } from "../../lib/drone/grid";
+import {
+  MAVIC_3_CLASSIC,
+  MAX_ROWS,
+  planGrid,
+  pointInPolygon,
+  type LatLng,
+} from "../../lib/drone/grid";
 
 /** 0.012° × 0.012° box (~1.3 km × 1.1 km) around the Oakwood AO. */
 const BOX: LatLng[] = [
@@ -84,9 +90,26 @@ describe("planGrid", () => {
   });
 
   it("throws RangeError on NaN / non-finite input", () => {
-    expect(() => planGrid([[NaN, 0], [0, 1], [1, 1]])).toThrow(RangeError);
-    expect(() => planGrid([[0, Infinity], [0, 1], [1, 1]])).toThrow(RangeError);
+    expect(() =>
+      planGrid([
+        [NaN, 0],
+        [0, 1],
+        [1, 1],
+      ]),
+    ).toThrow(RangeError);
+    expect(() =>
+      planGrid([
+        [0, Infinity],
+        [0, 1],
+        [1, 1],
+      ]),
+    ).toThrow(RangeError);
     expect(() => planGrid(BOX, { altitudeM: NaN })).toThrow(RangeError);
-    expect(() => planGrid([[0, 0], [0, 1]])).toThrow(RangeError);
+    expect(() =>
+      planGrid([
+        [0, 0],
+        [0, 1],
+      ]),
+    ).toThrow(RangeError);
   });
 });

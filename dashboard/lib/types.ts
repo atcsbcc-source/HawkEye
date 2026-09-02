@@ -2,10 +2,7 @@ export type LeadStatus = "active" | "flagged" | "dispatched";
 
 /** Operator verdict recorded against a flagged parcel. */
 export type VerificationVerdict =
-  | "verified_vacant"
-  | "false_positive"
-  | "occupied"
-  | "needs_recheck";
+  "verified_vacant" | "false_positive" | "occupied" | "needs_recheck";
 
 export const VERIFICATION_VERDICTS: VerificationVerdict[] = [
   "verified_vacant",
