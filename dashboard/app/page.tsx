@@ -3,6 +3,7 @@ import { fetchLeads } from "@/lib/data";
 import { DISTRESS_THRESHOLD_DAYS } from "@/lib/types";
 import { PropertyGrid } from "@/components/PropertyGrid";
 import { StatCard } from "@/components/StatCard";
+import { LeadActions } from "@/components/leads/LeadActions";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function CommandCenter() {
         />
       </div>
 
+      <LeadActions />
       <PropertyGrid leads={leads} />
     </div>
   );

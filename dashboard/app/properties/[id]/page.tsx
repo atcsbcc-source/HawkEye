@@ -4,6 +4,7 @@ import { ArrowLeft, MapPin } from "lucide-react";
 import { fetchLead, fetchScans } from "@/lib/data";
 import { DISTRESS_THRESHOLD_DAYS } from "@/lib/types";
 import { CompareViewer } from "@/components/CompareViewer";
+import { PropertyInsights } from "@/components/property/PropertyInsights";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,7 @@ export default async function PropertyDetail({
         scans={scans}
         alreadyDispatched={lead.status === "dispatched"}
       />
+      <PropertyInsights lead={lead} scans={scans} />
     </div>
   );
 }

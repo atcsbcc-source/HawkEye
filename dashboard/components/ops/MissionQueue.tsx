@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { OctagonX, Play, Plus } from "lucide-react";
 import type { Mission } from "@/lib/ops-types";
+import { MissionExportButton } from "@/components/missions/MissionExportButton";
 
 const STATUS_STYLE: Record<string, string> = {
   queued: "text-slate-300 border-slate-500/40",
@@ -91,6 +92,7 @@ export function MissionQueue({
                     <OctagonX className="h-3.5 w-3.5" />
                   </button>
                 )}
+                <MissionExportButton missionId={m.id} />
               </div>
             </div>
             {m.status === "active" && (

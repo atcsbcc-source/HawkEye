@@ -1,4 +1,4 @@
-import type { Flight, PropertyLead, PropertyScan } from "./types";
+import type { Flight, PropertyLead, PropertyScan, PropertyVerification } from "./types";
 
 /** Deterministic placeholder imagery so the UI is fully navigable before the
  *  first real flight is ingested. */
@@ -13,6 +13,8 @@ export const MOCK_LEADS: PropertyLead[] = [
     first_flagged_at: daysAgo(94), days_distressed: 94,
     latest_vacancy_confidence: 91, latest_lawn_growth_index: 0.62,
     latest_vehicle_present: false, latest_scan_at: daysAgo(2), notes: null,
+    neighborhood: "Oakwood", archived_at: null,
+    verification: "verified_vacant", verified_at: daysAgo(5), snoozed_until: null,
   },
   {
     id: "m2", parcel_id: "042-118-221", address: "207 Delmar Ave",
@@ -20,6 +22,8 @@ export const MOCK_LEADS: PropertyLead[] = [
     first_flagged_at: daysAgo(71), days_distressed: 71,
     latest_vacancy_confidence: 84, latest_lawn_growth_index: 0.44,
     latest_vehicle_present: true, latest_scan_at: daysAgo(2), notes: "Static sedan in drive since W28",
+    neighborhood: "Oakwood", archived_at: null,
+    verification: null, verified_at: null, snoozed_until: null,
   },
   {
     id: "m3", parcel_id: "042-121-030", address: "3311 Kestrel Ln",
@@ -27,6 +31,8 @@ export const MOCK_LEADS: PropertyLead[] = [
     first_flagged_at: daysAgo(38), days_distressed: 38,
     latest_vacancy_confidence: 77, latest_lawn_growth_index: 0.31,
     latest_vehicle_present: false, latest_scan_at: daysAgo(2), notes: null,
+    neighborhood: "Oakwood", archived_at: null,
+    verification: "needs_recheck", verified_at: daysAgo(3), snoozed_until: null,
   },
   {
     id: "m4", parcel_id: "042-109-114", address: "89 Piedmont Row",
@@ -34,6 +40,8 @@ export const MOCK_LEADS: PropertyLead[] = [
     first_flagged_at: daysAgo(120), days_distressed: 120,
     latest_vacancy_confidence: 95, latest_lawn_growth_index: 0.71,
     latest_vehicle_present: false, latest_scan_at: daysAgo(9), notes: "Sent to CRM 2026-08-23",
+    neighborhood: "Oakwood", archived_at: null,
+    verification: "verified_vacant", verified_at: daysAgo(12), snoozed_until: null,
   },
   {
     id: "m5", parcel_id: "042-113-042", address: "1502 Ashwood Ct",
@@ -41,6 +49,8 @@ export const MOCK_LEADS: PropertyLead[] = [
     first_flagged_at: null, days_distressed: null,
     latest_vacancy_confidence: 22, latest_lawn_growth_index: -0.12,
     latest_vehicle_present: true, latest_scan_at: daysAgo(2), notes: null,
+    neighborhood: "Oakwood", archived_at: null,
+    verification: null, verified_at: null, snoozed_until: null,
   },
   {
     id: "m6", parcel_id: "042-124-007", address: "612 Larkspur Dr",
@@ -48,6 +58,8 @@ export const MOCK_LEADS: PropertyLead[] = [
     first_flagged_at: daysAgo(66), days_distressed: 66,
     latest_vacancy_confidence: 80, latest_lawn_growth_index: 0.52,
     latest_vehicle_present: false, latest_scan_at: daysAgo(2), notes: null,
+    neighborhood: "Oakwood", archived_at: null,
+    verification: null, verified_at: null, snoozed_until: null,
   },
 ];
 
@@ -57,23 +69,54 @@ const mockFlight = (weeksAgo: number): Flight => ({
   flown_at: daysAgo(2 + weeksAgo * 7),
   neighborhood: "Oakwood",
   drone_model: "DJI Mavic 3 Classic",
+  altitude_m: 90,
+  gsd_cm_per_px: 2.4,
+  notes: weeksAgo === 0 ? "Light haze; two parcels re-flown" : null,
+  created_at: daysAgo(2 + weeksAgo * 7),
 });
 
+/** The four most recent weekly sorties, newest first. */
+export const MOCK_FLIGHTS: Flight[] = [0, 1, 2, 3].map(mockFlight);
+
 export function mockScansFor(propertyId: string): PropertyScan[] {
-  return [0, 1, 2, 3].map((w) => ({
-    id: `${propertyId}-s${w}`,
-    property_id: propertyId,
-    flight_id: `f${w}`,
-    image_url_current: img(`${propertyId}-w${35 - w}`),
-    image_url_previous: img(`${propertyId}-w${34 - w}`),
-    image_url_diff: null,
-    lawn_growth_index: Number((0.55 - w * 0.12).toFixed(2)),
-    vehicle_present: w > 1,
-    vehicle_static: w > 1,
-    change_score: Number((3.1 + w * 0.8).toFixed(1)),
-    vacancy_confidence: Math.max(10, 91 - w * 9),
-    alignment_quality: 0.87,
-    processed_at: daysAgo(2 + w * 7),
-    flight: mockFlight(w),
-  }));
+  return [0, 1, 2, 3].map((w) => {
+    const alignment = w === 2 ? 0.41 : 0.87;
+    return {
+      id: `${propertyId}-s${w}`,
+      property_id: propertyId,
+      flight_id: `f${w}`,
+      image_url_current: img(`${propertyId}-w${35 - w}`),
+      image_url_previous: img(`${propertyId}-w${34 - w}`),
+      image_url_diff: null,
+      lawn_growth_index: Number((0.55 - w * 0.12).toFixed(2)),
+      vehicle_present: w > 1,
+      vehicle_static: w > 1,
+      change_score: Number((3.1 + w * 0.8).toFixed(1)),
+      vacancy_confidence: Math.max(10, 91 - w * 9),
+      alignment_quality: alignment,
+      processed_at: daysAgo(2 + w * 7),
+      raw_metrics: { details: { low_alignment: alignment < 0.5 } },
+      flight: mockFlight(w),
+    };
+  });
+}
+
+/** Verification history seeded for the mock leads that carry a verdict. */
+export function mockVerificationsFor(propertyId: string): PropertyVerification[] {
+  const lead = MOCK_LEADS.find((l) => l.id === propertyId);
+  if (!lead?.verification) return [];
+  return [
+    {
+      id: `${propertyId}-v1`,
+      property_id: propertyId,
+      scan_id: `${propertyId}-s0`,
+      verdict: lead.verification,
+      note:
+        lead.verification === "needs_recheck"
+          ? "Shadow across the drive; re-fly before deciding."
+          : "Confirmed against W35 imagery.",
+      verified_by: "operator",
+      created_at: lead.verified_at ?? daysAgo(3),
+    },
+  ];
 }
