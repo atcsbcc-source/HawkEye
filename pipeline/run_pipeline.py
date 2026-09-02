@@ -93,6 +93,34 @@ def process_flight(db: Client, flight_code: str, data_dir: Path, gsd_cm: float) 
         print(f"  - {parcel_id}: confidence={result.vacancy_confidence} "
               f"lgi={result.lawn_growth_index} change={result.change_score}%")
 
+        notify_automation({
+            "property_id": prop["id"],
+            "parcel_id": parcel_id,
+            "vacancy_confidence": result.vacancy_confidence,
+            "lawn_growth_index": result.lawn_growth_index,
+        })
+
+
+def notify_automation(payload: dict) -> None:
+    """Fire the dashboard's automation engine for this scan (best-effort).
+    Set DASHBOARD_URL (e.g. https://hawkeye.example.com) to enable."""
+    base = os.environ.get("DASHBOARD_URL")
+    if not base:
+        return
+    import json
+    import urllib.request
+
+    req = urllib.request.Request(
+        f"{base.rstrip('/')}/api/automation/evaluate",
+        data=json.dumps({"trigger": "scan_processed", "payload": payload}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except OSError as exc:
+        print(f"    (automation notify failed: {exc})")
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="HawkEye flight batch processor")

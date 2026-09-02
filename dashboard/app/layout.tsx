@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Crosshair, LayoutDashboard, Plane, Settings } from "lucide-react";
+import { Crosshair, LayoutDashboard, Radar, Workflow } from "lucide-react";
+import "leaflet/dist/leaflet.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -10,8 +11,8 @@ export const metadata: Metadata = {
 
 const nav = [
   { href: "/", label: "Command Center", icon: LayoutDashboard },
-  { href: "/#flights", label: "Flights", icon: Plane },
-  { href: "/#settings", label: "Settings", icon: Settings },
+  { href: "/operations", label: "Operations", icon: Radar },
+  { href: "/automation", label: "Automation", icon: Workflow },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -48,7 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           <main className="min-w-0 flex-1">
             <header className="flex items-center justify-between border-b border-surface-border bg-surface-raised/60 px-6 py-4 backdrop-blur">
-              <h1 className="text-sm font-semibold text-white">Command Center</h1>
+              <h1 className="text-sm font-semibold text-white">HawkEye Console</h1>
               <span className="text-xs text-slate-400">
                 {new Date().toLocaleDateString(undefined, {
                   weekday: "short",

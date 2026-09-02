@@ -29,6 +29,9 @@ CRM dispatch.
 | `pipeline/change_detector.py` | Core CV: alignment, illumination/shadow suppression, change + lawn + vehicle scoring |
 | `pipeline/run_pipeline.py` | Batch runner: analyze a flight's crops, upload imagery, upsert `property_scans` |
 | `dashboard/` | Next.js 14 (App Router) + TypeScript + Tailwind + Lucide command center |
+| `dashboard/app/operations` | Ops console: live tactical map, telemetry, mission tasking |
+| `dashboard/app/automation` | Automation rules (trigger → condition → action) + audit stream |
+| `dashboard/lib/drone/` | Drone adapter interface: flight simulator + DJI Cloud API stub |
 
 ## 1. Database (Supabase)
 
@@ -109,6 +112,33 @@ npm run dev
   comparator, per-scan metrics, and a **Dispatch lead to CRM** action that
   POSTs to `CRM_WEBHOOK_URL` via `/api/dispatch` and marks the lead
   `dispatched`.
+- **Operations** (`/operations`) — dark tactical map (Leaflet/CARTO) of the
+  AO with parcel status markers, live 1 Hz aircraft telemetry over SSE
+  (battery/alt/speed/heading/sats/link), and a mission tasking queue:
+  create a grid mission over the AO, launch, watch progress, abort/RTB.
+- **Automation** (`/automation`) — declarative trigger→condition→action
+  rules (scan confidence ≥ N → flag property; distress ≥ N days → CRM
+  webhook; mission completed → notify) with enable toggles, fire counts,
+  and an append-only audit event stream fed by missions, rules, the
+  pipeline, and Postgres triggers.
+
+## Drone integration (SDK / enterprise aircraft)
+
+The ops console talks to aircraft through one interface,
+`dashboard/lib/drone/adapter.ts`:
+
+- **SimulatorAdapter** (default) — in-process flight model (serpentine grid
+  coverage, battery drain, RTB) so the console is fully operable with zero
+  hardware.
+- **DjiCloudAdapter** (`lib/drone/djiCloud.ts`) — the integration point for
+  DJI Cloud API aircraft (Mavic 3E/3T, Matrice 30/300/350, Dock): point DJI
+  Pilot 2 at your MQTT broker, feed `thing/product/{sn}/osd` telemetry into
+  `ingestOsd()`, and implement wayline KMZ upload + `flighttask_execute`
+  for `launchMission()`. The class docs sketch the exact topic map.
+
+Consumer drones without SDK access (Mavic 3 Classic, Mini 5 Pro) keep using
+the manual KMZ→DJI Fly workflow; their imagery enters through
+`crop_parcels.py` identically either way.
 
 ## Operational notes
 
