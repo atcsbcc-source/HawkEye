@@ -72,6 +72,32 @@ its own icon:
   exists — and opens the browser; then use *Add to Dock* on that page. Closing
   the Terminal window stops the server.
 
+## Deployment (Vercel)
+
+The dashboard is a standard Next.js 14 app; `vercel.json` schedules the daily
+distress sweep. Project settings: **Root Directory `dashboard`**, Production
+Branch = the repo's default branch. Environment variables (Production):
+
+| Variable | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://<ref>.supabase.co` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable / anon key (safe in the browser) |
+| `SUPABASE_SERVICE_ROLE_KEY` | service role key — server only, never `NEXT_PUBLIC_` |
+| `HAWKEYE_PIPELINE_TOKEN` | ≥ 32 chars; same value in `pipeline/.env` |
+| `CRON_SECRET` | ≥ 16 chars; Vercel Cron sends it to `/api/automation/sweep` |
+| `WEBHOOK_SIGNING_SECRET` | optional HMAC key for outbound webhooks |
+| `TRUST_PROXY` | `1` (Vercel terminates TLS and sets `x-forwarded-*`) |
+| `SITE_URL` | the deployed origin, once known |
+| `NEXT_PUBLIC_OPS_TZ` | IANA zone for every rendered time |
+| `CRM_WEBHOOK_URL` | optional CRM endpoint (https, public host) |
+
+The production boot guard refuses to start with `NEXT_PUBLIC_SUPABASE_URL` set
+but either key missing, and refuses DEV MODE entirely unless
+`HAWKEYE_ALLOW_DEV_MODE=1` — so a misconfigured deploy fails loudly instead of
+serving an unauthenticated console. After the first deploy, set Supabase →
+Authentication → URL Configuration (Site URL + `<origin>/auth/confirm`) and
+optionally Vercel Deployment Protection for an extra gate in front of `/login`.
+
 ## Data modes
 
 | Mode | When | Behaviour |
