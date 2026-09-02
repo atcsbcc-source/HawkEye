@@ -2,14 +2,110 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-surface text-slate-200 antialiased;
+/*
+ * Spacing rhythm (4 / 8 / 16 / 24):
+ *   - inside a cell / chip .............. p-1 / gap-1  (4px)
+ *   - between related controls .......... gap-2        (8px)
+ *   - panel padding + intra-panel ....... p-4 / space-y-3 (16 / 12px)
+ *   - between panels .................... gap-4        (16px)
+ *   - between page sections ............. space-y-6    (24px)
+ */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    scrollbar-color: #334155 #0b1220;
+  }
+
+  body {
+    @apply bg-surface text-slate-200 antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-sky-400 ring-offset-2 ring-offset-surface;
+  }
+
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='m6 9 6 6 6-6'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 1rem;
+    padding-right: 2rem;
+  }
+
+  option {
+    @apply bg-surface-raised text-slate-200;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded bg-slate-700;
+  }
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-thumb {
-  @apply rounded bg-slate-700;
+@layer components {
+  .panel {
+    @apply rounded-xl border border-surface-border bg-surface-raised;
+  }
+  .panel-title {
+    @apply text-label font-semibold uppercase text-slate-400;
+  }
+  .kicker {
+    @apply font-mono text-label uppercase text-slate-400;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn h-9 bg-amber-500 px-4 text-sm text-black hover:bg-amber-400;
+  }
+  .btn-secondary {
+    @apply btn h-8 border border-surface-border bg-surface px-3 text-xs text-slate-200 hover:bg-surface-hover;
+  }
+  .btn-ghost {
+    @apply btn h-8 px-2.5 text-xs text-slate-400 hover:bg-surface-hover hover:text-white;
+  }
+  .btn-danger {
+    @apply btn h-9 border border-red-500/40 bg-red-500/15 px-4 text-sm text-red-300 hover:bg-red-500/25;
+  }
+
+  .input {
+    @apply h-9 w-full rounded-lg border border-surface-border bg-surface px-3 text-sm text-slate-200 placeholder:text-slate-500 focus-visible:border-sky-500 focus-visible:ring-0 focus-visible:ring-offset-0;
+  }
+
+  /* Leaflet chrome, themed to the console. */
+  .leaflet-bar a,
+  .leaflet-bar a:hover,
+  .leaflet-bar a:focus {
+    @apply border-surface-border bg-surface-raised text-slate-200;
+  }
+  .leaflet-bar a:hover {
+    @apply bg-surface-hover;
+  }
+  .leaflet-bar a.leaflet-disabled {
+    @apply bg-surface text-slate-500;
+  }
+  .leaflet-control-attribution {
+    @apply bg-surface/80 font-sans text-[11px] text-slate-400;
+  }
+  .leaflet-control-attribution a {
+    @apply text-slate-300;
+  }
+  .leaflet-tooltip {
+    @apply rounded border border-surface-border bg-surface-raised/95 font-mono text-[11px] text-slate-200 shadow-none;
+  }
+  .leaflet-tooltip-top:before,
+  .leaflet-tooltip-bottom:before,
+  .leaflet-tooltip-left:before,
+  .leaflet-tooltip-right:before {
+    display: none;
+  }
 }
