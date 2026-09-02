@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Pencil } from "lucide-react";
 import type { PropertyLead, PropertyScan } from "@/lib/types";
+import { fmtFullDate } from "@/lib/format";
 import { ScanTimeline } from "./ScanTimeline";
 import { VerificationPanel } from "./VerificationPanel";
 
@@ -19,7 +20,7 @@ export function PropertyInsights({ lead, scans }: { lead: PropertyLead; scans: P
         <span>
           {lead.neighborhood ? `Grid: ${lead.neighborhood}` : "No neighborhood assigned"}
           {lead.snoozed_until && new Date(lead.snoozed_until) > new Date() && (
-            <> · auto-flag snoozed until {new Date(lead.snoozed_until).toLocaleDateString()}</>
+            <> · auto-flag snoozed until {fmtFullDate(lead.snoozed_until)}</>
           )}
         </span>
         <Link

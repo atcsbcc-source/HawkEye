@@ -10,22 +10,17 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- properties: signed-in operators may change only status and notes.
--- (verification columns added later are written via the service role only.)
+-- properties: signed-in operators get NO direct write path. Every status /
+-- notes / verification change goes through the validated API routes with the
+-- service role, which enforce the dispatch verdict gate, the sweep ledger and
+-- the audit stream — a PostgREST UPDATE with the anon key + a session JWT
+-- would bypass all three. (The browser client is only used by the auth
+-- screens; lib/supabase.ts writes are service-role.)
 -- ----------------------------------------------------------------------------
 drop policy if exists "authenticated update property status" on public.properties;
 drop policy if exists "authenticated update lead status/notes" on public.properties;
 
 revoke update on public.properties from authenticated;
-grant update (status, notes) on public.properties to authenticated;
-
-create policy "authenticated update lead status/notes" on public.properties
-  for update to authenticated
-  using (true)
-  with check (
-    status in ('active', 'flagged', 'dispatched')
-    and coalesce(length(notes), 0) <= 2000
-  );
 
 -- ----------------------------------------------------------------------------
 -- anon has no business in this schema (RLS already blocks it; remove the

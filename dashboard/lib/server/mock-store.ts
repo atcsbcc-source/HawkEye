@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import type { FlagOutcome } from "../automation/actions";
 import { MOCK_FLIGHTS, MOCK_LEADS, mockScansFor, mockVerificationsFor } from "../mock";
 import type {
   Flight,
@@ -135,6 +136,7 @@ export function mockRestoreProperty(id: string, input: NewPropertyInput): Proper
   return withDerived(p);
 }
 
+/** Archived parcels are not editable (Supabase mode filters `archived_at is null`). */
 export function mockUpdateProperty(
   id: string,
   patch: Partial<
@@ -145,7 +147,7 @@ export function mockUpdateProperty(
   >,
 ): PropertyLead | null {
   const p = store().properties.find((x) => x.id === id);
-  if (!p) return null;
+  if (!p || p.archived_at) return null;
   Object.assign(p, patch);
   return withDerived(p);
 }
@@ -153,20 +155,23 @@ export function mockUpdateProperty(
 /**
  * Mock-mode counterpart of the Postgres auto_flag_property() trigger: promote
  * to `flagged` and stamp first_flagged_at unless the parcel is dispatched,
- * archived, unknown or inside a demoting verdict's snooze window.
+ * archived, unknown or inside a demoting verdict's snooze window. Reports
+ * `already_flagged` so callers can tell a no-op from a real transition.
  */
-export function mockFlagProperty(id: string): boolean {
+export function mockFlagProperty(id: string): FlagOutcome {
   const p = store().properties.find((x) => x.id === id);
-  if (!p || p.archived_at || p.status === "dispatched") return false;
-  if (p.snoozed_until && new Date(p.snoozed_until).getTime() > Date.now()) return false;
+  if (!p || p.archived_at || p.status === "dispatched") return "not_flaggable";
+  if (p.snoozed_until && new Date(p.snoozed_until).getTime() > Date.now()) return "not_flaggable";
+  if (p.status === "flagged") return "already_flagged";
   p.status = "flagged";
   p.first_flagged_at = p.first_flagged_at ?? new Date().toISOString();
-  return true;
+  return "flagged";
 }
 
+/** False for unknown AND already-archived parcels (a repeat DELETE is a 404, as in Supabase mode). */
 export function mockArchiveProperty(id: string): boolean {
   const p = store().properties.find((x) => x.id === id);
-  if (!p) return false;
+  if (!p || p.archived_at) return false;
   p.archived_at = new Date().toISOString();
   return true;
 }
@@ -188,7 +193,7 @@ export function mockRecordVerification(input: {
   verified_by?: string | null;
 }): { verification: PropertyVerification; property: PropertyLead } | null {
   const p = store().properties.find((x) => x.id === input.property_id);
-  if (!p) return null;
+  if (!p || p.archived_at) return null;
   const now = new Date().toISOString();
   const verification: PropertyVerification = {
     id: randomUUID(),

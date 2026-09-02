@@ -4,6 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plane } from "lucide-react";
 import { fetchFlight, fetchFlightScans, fetchFlights } from "@/lib/data";
+import { AUTO_FLAG_CONFIDENCE } from "@/lib/constants";
+import { fmtLongDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -56,8 +58,7 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
           <h2 className="font-mono text-2xl font-semibold text-white">{flight.flight_code}</h2>
           <p className="mt-1 flex items-center gap-2 text-sm text-slate-400">
             <Plane className="h-4 w-4" />
-            {new Date(flight.flown_at).toLocaleDateString(undefined, { dateStyle: "long" })} ·{" "}
-            {flight.neighborhood} · {flight.drone_model}
+            {fmtLongDate(flight.flown_at)} · {flight.neighborhood} · {flight.drone_model}
             {flight.altitude_m != null && ` · ${flight.altitude_m} m AGL`}
             {flight.gsd_cm_per_px != null && ` · ${Number(flight.gsd_cm_per_px).toFixed(2)} cm/px`}
           </p>
@@ -119,7 +120,7 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
                     <td className="px-4 py-3 text-right tabular-nums">
                       <span
                         className={
-                          s.vacancy_confidence >= 75
+                          s.vacancy_confidence >= AUTO_FLAG_CONFIDENCE
                             ? "font-semibold text-amber-300"
                             : "text-slate-300"
                         }

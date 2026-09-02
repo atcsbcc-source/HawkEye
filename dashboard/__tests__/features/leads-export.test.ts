@@ -40,6 +40,39 @@ describe("csvEscape", () => {
     expect(csvEscape(0)).toBe("0");
     expect(csvEscape(false)).toBe("false");
   });
+
+  it("neutralises spreadsheet formula prefixes in strings but not in numbers", () => {
+    expect(csvEscape('=HYPERLINK("http://evil.example/x","click")')).toBe(
+      `"'=HYPERLINK(""http://evil.example/x"",""click"")"`,
+    );
+    expect(csvEscape("+cmd|' /C calc'!A0")).toBe(`"'+cmd|' /C calc'!A0"`);
+    expect(csvEscape("-1 Main St")).toBe(`"'-1 Main St"`);
+    expect(csvEscape("@SUM(A1)")).toBe(`"'@SUM(A1)"`);
+    expect(csvEscape("\tx")).toBe(`"'\tx"`);
+    expect(csvEscape(-80.8431)).toBe("-80.8431");
+    expect(csvEscape("12 Oak St")).toBe("12 Oak St");
+  });
+});
+
+describe("leadsToCsv (formula injection)", () => {
+  it("never emits a cell that starts with a formula character", () => {
+    const csv = leadsToCsv(
+      [
+        lead({
+          parcel_id: "CSV-INJ-1",
+          address: '=HYPERLINK("http://evil.example/x","click")',
+          neighborhood: "+cmd|' /C calc'!A0",
+        }),
+      ],
+      "http://localhost:3201",
+    );
+    const cells = csv.split("\r\n")[1].split(",");
+    for (const cell of cells) expect(cell).not.toMatch(/^[=+@\t\r]/);
+    expect(csv).toContain(`"'=HYPERLINK(`);
+    expect(csv).toContain(`"'+cmd|`);
+    // Negative longitudes are numbers and stay as-is.
+    expect(csv).toContain(",35.2271,-80.8431,");
+  });
 });
 
 describe("leadsToCsv", () => {

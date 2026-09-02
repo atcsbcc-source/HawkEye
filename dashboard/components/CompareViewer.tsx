@@ -442,6 +442,9 @@ export function DispatchCard({
         setErrorMsg(msg);
         setState("error");
         toast.error(`Dispatch failed: ${msg}`);
+        // 409 = the lead changed under us (verdict / status); re-render the
+        // page so the disabled banner replaces the stale enabled button.
+        if (res.status === 409) router.refresh();
         return;
       }
       setState("sent");

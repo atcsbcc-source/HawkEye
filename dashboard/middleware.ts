@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { forwardedHop } from "@/lib/server/rate-limit";
 
 /**
  * Edge middleware: session refresh + first-line auth gate + CSRF checks.
@@ -61,7 +62,8 @@ function requestHosts(req: NextRequest): string[] {
   const host = req.headers.get("host");
   if (host) hosts.add(host.toLowerCase());
   if (process.env.TRUST_PROXY === "1") {
-    const fwd = req.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+    // Same hop rule as clientIp(): the entry our own proxy wrote, never the first.
+    const fwd = forwardedHop(req.headers.get("x-forwarded-host"));
     if (fwd) hosts.add(fwd.toLowerCase());
   }
   hosts.add(req.nextUrl.host.toLowerCase());

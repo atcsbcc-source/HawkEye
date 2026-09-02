@@ -40,11 +40,23 @@ export function filterLeads(leads: PropertyLead[], f: LeadFilter): PropertyLead[
   });
 }
 
-/** RFC 4180 field escaping: quote when the value contains a comma, quote, CR or LF. */
+/**
+ * Leading characters Excel / Sheets treat as a formula (or a DDE call). Only
+ * operator-supplied strings are neutralised — numbers such as -80.84 are not.
+ */
+const FORMULA_PREFIX = /^[=+\-@\t\r]/;
+
+/**
+ * RFC 4180 field escaping: quote when the value contains a comma, quote, CR or
+ * LF. A string starting with = + - @ TAB CR is prefixed with a single quote and
+ * quoted so a crafted address never executes when the export is opened in a
+ * spreadsheet (the file is handed to third parties).
+ */
 export function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return "";
-  const s = typeof value === "string" ? value : String(value);
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  if (typeof value !== "string") return String(value);
+  const s = FORMULA_PREFIX.test(value) ? `'${value}` : value;
+  return /[",\r\n]/.test(s) || s !== value ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function leadRow(lead: PropertyLead, origin: string): Record<LeadExportColumn, unknown> {

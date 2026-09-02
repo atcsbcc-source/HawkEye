@@ -50,7 +50,7 @@ export const PATCH = withAuth<Params>(async (req, user, { params }) => {
     if (!flight) return apiError("Flight not found", 404);
   }
 
-  pushEvent({
+  await pushEvent({
     actor: user.email,
     actorUserId: user.id,
     eventType: "flight.updated",
@@ -93,7 +93,7 @@ export const DELETE = withAuth<Params>(
       return apiError("Flight not found", 404);
     }
 
-    pushEvent({
+    await pushEvent({
       actor: user.email,
       actorUserId: user.id,
       eventType: "flight.deleted",

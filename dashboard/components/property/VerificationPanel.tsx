@@ -4,6 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { CheckCircle2, CircleSlash, Home, Loader2, RotateCcw } from "lucide-react";
+// OPS_TZ formatter: the server and every browser render the same string, so
+// the SSR'd verdict time hydrates cleanly in any operator time zone.
+import { fmtDateTime } from "@/lib/format";
 import {
   VERDICT_LABEL,
   type PropertyLead,
@@ -160,9 +163,7 @@ export function VerificationPanel({
           {current ? (
             <>
               Current verdict: <span className="text-slate-100">{VERDICT_LABEL[current]}</span>
-              {verifiedAt && (
-                <span className="text-slate-400"> · {new Date(verifiedAt).toLocaleString()}</span>
-              )}
+              {verifiedAt && <span className="text-slate-400"> · {fmtDateTime(verifiedAt)}</span>}
             </>
           ) : (
             "No verdict yet"
@@ -245,7 +246,7 @@ export function VerificationPanel({
           {history?.map((h) => (
             <li key={h.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
               <span className="font-mono text-[11px] text-slate-400">
-                {new Date(h.created_at).toLocaleString()}
+                {fmtDateTime(h.created_at)}
               </span>
               <span className="text-slate-100">{VERDICT_LABEL[h.verdict]}</span>
               {h.verified_by && <span className="text-slate-500">by {h.verified_by}</span>}

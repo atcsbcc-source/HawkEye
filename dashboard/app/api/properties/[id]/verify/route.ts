@@ -112,7 +112,7 @@ export const POST = withAuth<Params>(async (req, user, { params }) => {
     property = res.property;
   }
 
-  pushEvent({
+  await pushEvent({
     actor: verifiedBy,
     actorUserId: user.id,
     eventType: "property.verified",

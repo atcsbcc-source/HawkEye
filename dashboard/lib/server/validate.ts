@@ -65,10 +65,19 @@ export async function parseJson<S extends z.ZodType>(
   return { ok: true, data: parsed.data };
 }
 
-class BodyTooLarge extends Error {}
+/** Thrown by `readCappedBytes` / `readCapped` once the stream passes the cap. */
+export class BodyTooLarge extends Error {}
 
-async function readCapped(req: Request, maxBytes: number): Promise<string> {
-  if (!req.body) return "";
+/**
+ * Stream the request body and stop the moment it exceeds `maxBytes` — unlike
+ * `req.text()` / `req.formData()`, which buffer a chunked (Content-Length-less)
+ * body in full before anyone can measure it.
+ */
+export async function readCappedBytes(
+  req: Request,
+  maxBytes: number,
+): Promise<Uint8Array<ArrayBuffer>> {
+  if (!req.body) return new Uint8Array(0);
   const reader = req.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -90,7 +99,11 @@ async function readCapped(req: Request, maxBytes: number): Promise<string> {
     merged.set(c, offset);
     offset += c.byteLength;
   }
-  return new TextDecoder().decode(merged);
+  return merged;
+}
+
+export async function readCapped(req: Request, maxBytes: number): Promise<string> {
+  return new TextDecoder().decode(await readCappedBytes(req, maxBytes));
 }
 
 /** Validate URL search params against a schema (400 on failure). */

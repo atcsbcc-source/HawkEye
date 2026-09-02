@@ -33,12 +33,13 @@ import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
-
-from supabase import Client, create_client
+from typing import TYPE_CHECKING, Any
 
 from change_detector import analyze_pair
 from settings import configure_logging, load_env, require_env, require_https
+
+if TYPE_CHECKING:  # the supabase package is only needed at run time (see get_client)
+    from supabase import Client
 
 log = logging.getLogger("hawkeye")
 
@@ -61,6 +62,9 @@ class RunSummary:
 
 
 def get_client() -> Client:
+    # Imported here (as crop_parcels.py does) so `--help` works without the package.
+    from supabase import create_client
+
     load_env()
     return create_client(require_env("SUPABASE_URL"), require_env("SUPABASE_SERVICE_ROLE_KEY"))
 

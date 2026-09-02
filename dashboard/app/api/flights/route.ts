@@ -71,7 +71,7 @@ export const POST = withAuth(async (req, user) => {
     flight = created;
   }
 
-  pushEvent({
+  await pushEvent({
     actor: user.email,
     actorUserId: user.id,
     eventType: "flight.created",

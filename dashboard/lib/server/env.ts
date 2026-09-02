@@ -53,7 +53,16 @@ const EnvSchema = z
     WEBHOOK_SIGNING_SECRET: z.string().min(16, "must be at least 16 characters").optional(),
     WEBHOOK_ALLOWED_HOSTS: optionalString,
     TRUST_PROXY: z.enum(["0", "1"]).optional(),
+    TRUST_PROXY_HOPS: z
+      .string()
+      .regex(/^[1-9]\d?$/, "must be a small positive integer (proxies that append x-forwarded-for)")
+      .optional(),
     HAWKEYE_ALLOW_DEV_MODE: z.enum(["0", "1"]).optional(),
+    SITE_URL: z
+      .string()
+      .url()
+      .refine((u) => /^https?:$/.test(new URL(u).protocol), "must be an http(s) URL")
+      .optional(),
   })
   .superRefine((env, ctx) => {
     if (env.NEXT_PUBLIC_SUPABASE_URL) {
@@ -93,19 +102,12 @@ function pick(source: NodeJS.ProcessEnv): Record<string, string | undefined> {
   return out;
 }
 
-let cached: HawkeyeEnv | null = null;
-
-/** Parse and cache process.env. Throws a readable error on misconfiguration. */
+/** Parse process.env. Throws a readable error on misconfiguration. */
 export function validateEnv(source: NodeJS.ProcessEnv = process.env): HawkeyeEnv {
   const result = EnvSchema.safeParse(pick(source));
   if (!result.success) {
     const lines = result.error.issues.map((i) => `  ${i.path.join(".") || "env"}: ${i.message}`);
     throw new Error(`[hawkeye] invalid environment:\n${lines.join("\n")}`);
   }
-  cached = result.data;
   return result.data;
-}
-
-export function getEnv(): HawkeyeEnv {
-  return cached ?? validateEnv();
 }

@@ -83,16 +83,43 @@ export function trustProxy(): boolean {
 export const NO_CLIENT_IP = "direct";
 
 /**
- * Best-effort client IP. Only the first `x-forwarded-for` hop is trusted and
- * only when TRUST_PROXY=1; otherwise the platform-provided `req.ip` (Vercel) is
- * used, and `NO_CLIENT_IP` when there is none (there is no socket address on a
+ * Number of reverse proxies in front of the app that APPEND to
+ * `x-forwarded-for` (TRUST_PROXY_HOPS, default 1). The client controls every
+ * hop before the ones our own proxies add, so only the N-th entry from the
+ * right is trustworthy.
+ */
+export function trustedProxyHops(): number {
+  const n = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
+
+/**
+ * The `x-forwarded-for` hop written by our own proxy: the last entry when one
+ * proxy appends (nginx `$proxy_add_x_forwarded_for`, Cloudflare, ALB) or
+ * overwrites (Vercel); the N-th from the right with TRUST_PROXY_HOPS=N. The
+ * FIRST entry is never used — a client can send any value there.
+ */
+export function forwardedHop(header: string | null, hops = trustedProxyHops()): string | null {
+  if (!header) return null;
+  const entries = header
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (entries.length === 0) return null;
+  return entries[Math.max(0, entries.length - hops)] ?? null;
+}
+
+/**
+ * Best-effort client IP. Only the hop our own proxy appended to
+ * `x-forwarded-for` is trusted (see `forwardedHop`) and only when
+ * TRUST_PROXY=1; otherwise the platform-provided `req.ip` (Vercel) is used,
+ * and `NO_CLIENT_IP` when there is none (there is no socket address on a
  * web-standard Request).
  */
 export function clientIp(req: Request): string {
   if (trustProxy()) {
-    const xff = req.headers.get("x-forwarded-for");
-    const first = xff?.split(",")[0]?.trim();
-    if (first) return first.slice(0, 64);
+    const hop = forwardedHop(req.headers.get("x-forwarded-for"));
+    if (hop) return hop.slice(0, 64);
     const real = req.headers.get("x-real-ip")?.trim();
     if (real) return real.slice(0, 64);
   }

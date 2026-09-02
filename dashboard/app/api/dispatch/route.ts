@@ -7,7 +7,7 @@ import { apiError, parseJson } from "@/lib/server/validate";
 import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { safePostJson, WebhookError } from "@/lib/server/safe-fetch";
 import { mockGetProperty, mockScans, mockUpdateProperty } from "@/lib/server/mock-store";
-import type { LeadStatus, VerificationVerdict } from "@/lib/types";
+import { VERDICT_LABEL, type LeadStatus, type VerificationVerdict } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -25,8 +25,9 @@ interface LeadRow {
  *
  * Fired after an operator manually verifies the imagery. Forwards the lead to
  * the configured CRM webhook (signed, timeout-bounded), then marks the
- * property `dispatched`. The verdict gate the UI shows is enforced here too:
- * a lead whose verdict is anything but `verified_vacant` is never dispatched.
+ * property `dispatched`. The gate the UI shows is enforced here too: only a
+ * `flagged` lead whose verdict is `verified_vacant` is ever dispatched (no
+ * verdict is not enough — the operator must confirm first).
  */
 export const POST = withAuth(async (req, user) => {
   const rl = rateLimit("dispatch", user.id, 10);
@@ -82,10 +83,17 @@ export const POST = withAuth(async (req, user) => {
     }
   }
 
+  // Manual dispatch is for flagged leads an operator has explicitly confirmed;
+  // the sweep is the only path that dispatches an unverified flagged lead.
   if (row.status === "dispatched") return apiError("Property already dispatched", 409);
-  if (row.verification && row.verification !== "verified_vacant") {
+  if (row.status !== "flagged") {
+    return apiError("Only flagged leads can be dispatched", 409);
+  }
+  if (row.verification !== "verified_vacant") {
     return apiError(
-      `Verdict is ${row.verification}; only verified_vacant leads can be dispatched`,
+      row.verification
+        ? `Verdict is ${VERDICT_LABEL[row.verification]} — only ${VERDICT_LABEL.verified_vacant} leads can be dispatched`
+        : `No verdict yet — mark the parcel ${VERDICT_LABEL.verified_vacant} before dispatching`,
       409,
     );
   }
@@ -135,7 +143,7 @@ export const POST = withAuth(async (req, user) => {
     mockUpdateProperty(propertyId, { status: "dispatched" });
   }
 
-  pushEvent({
+  await pushEvent({
     actor: user.email,
     actorUserId: user.id,
     eventType: "lead.dispatched",

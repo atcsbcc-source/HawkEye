@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, RefreshCw } from "lucide-react";
 import type { AuditEvent } from "@/lib/ops-types";
+import { fmtDateTime } from "@/lib/format";
+
+interface SweepFailure {
+  reason: string;
+  kind?: string | null;
+  count: number;
+}
 
 interface SweepSummary {
   scanned: number;
@@ -11,8 +18,35 @@ interface SweepSummary {
   failed?: number;
   skipped: number;
   dispatched?: number;
+  /** Distinct failure reasons behind `failed`. */
+  failures?: SweepFailure[];
   minDays?: number | null;
   at: string;
+}
+
+/** Operator-facing hint for a failure class the sweep reports. */
+function failureHint(f: SweepFailure): string {
+  switch (f.kind) {
+    case "unconfigured":
+      return "set CRM_WEBHOOK_URL or a rule URL";
+    case "mock_mode":
+      return "configure Supabase to deliver webhooks";
+    case "unsafe_url":
+      return "webhook must be a public https URL (see WEBHOOK_ALLOWED_HOSTS)";
+    case "timeout":
+    case "network":
+    case "http":
+      return "CRM did not accept the lead; retried next sweep";
+    default:
+      return "";
+  }
+}
+
+function parseFailures(v: unknown): SweepFailure[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  return v
+    .filter((f): f is SweepFailure => Boolean(f) && typeof f.reason === "string")
+    .map((f) => ({ reason: f.reason, kind: f.kind ?? null, count: Number(f.count ?? 1) }));
 }
 
 /** 'Run sweep now' + last-sweep summary (from the newest automation.sweep audit event). */
@@ -29,14 +63,15 @@ export function SweepBar() {
         (e) => e.eventType === "automation.sweep",
       );
       if (ev) {
-        const d = ev.detail as Record<string, number | null | undefined>;
+        const d = ev.detail as Record<string, unknown>;
         setLast({
           scanned: Number(d.scanned ?? 0),
           fired: Number(d.fired ?? 0),
           failed: d.failed == null ? undefined : Number(d.failed),
           skipped: Number(d.skipped ?? 0),
           dispatched: d.dispatched == null ? undefined : Number(d.dispatched),
-          minDays: d.minDays ?? null,
+          failures: parseFailures(d.failures),
+          minDays: typeof d.minDays === "number" ? d.minDays : null,
           at: ev.occurredAt,
         });
       }
@@ -70,6 +105,7 @@ export function SweepBar() {
         failed: json.failed,
         skipped: json.skipped,
         dispatched: json.dispatched,
+        failures: parseFailures(json.failures),
         minDays: json.minDays,
         at: json.ranAt ?? new Date().toISOString(),
       });
@@ -89,7 +125,7 @@ export function SweepBar() {
         <p className="mt-1 text-xs text-slate-400">
           {last ? (
             <>
-              Last sweep {new Date(last.at).toLocaleString()} · scanned{" "}
+              Last sweep {fmtDateTime(last.at)} · scanned{" "}
               <span className="tabular-nums text-slate-100">{last.scanned}</span> · fired{" "}
               <span className="tabular-nums text-amber-300">{last.fired}</span>
               {last.failed ? (
@@ -114,6 +150,19 @@ export function SweepBar() {
             "No sweep recorded yet. Scheduled daily at 13:00 UTC via vercel.json; run it now to evaluate distress rules against flagged parcels."
           )}
         </p>
+        {last?.failed && last.failures && last.failures.length > 0 ? (
+          <ul className="mt-1 space-y-0.5 text-xs text-red-300">
+            {last.failures.map((f) => {
+              const hint = failureHint(f);
+              return (
+                <li key={f.reason}>
+                  failed {f.count} — {f.reason}
+                  {hint && <span className="text-slate-400"> ({hint})</span>}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
         {error && <p className="mt-1 text-xs text-red-400">{error}</p>}
       </div>
       <button

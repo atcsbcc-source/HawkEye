@@ -179,8 +179,11 @@ export const AuditQuery = z.object({
 // ---------------------------------------------------------------------------
 // Properties / flights / verification (features routes)
 // ---------------------------------------------------------------------------
-const Lat = z.coerce.number().refine(Number.isFinite, "lat must be a number").min(-90).max(90);
-const Lng = z.coerce.number().refine(Number.isFinite, "lng must be a number").min(-180).max(180);
+// JSON routes receive real numbers: no coercion, so `true`, `null` or `[]`
+// can never turn into 1 / 0 and silently relocate a parcel. The CSV importer
+// (lib/import/parse.ts) is the only place string cells are converted.
+const Lat = z.number().finite().min(-90).max(90);
+const Lng = z.number().finite().min(-180).max(180);
 const IsoDate = z
   .string()
   .trim()
@@ -224,8 +227,8 @@ export const FlightCreate = z.strictObject({
   flown_at: IsoDate,
   neighborhood: z.string().trim().min(1).max(80),
   drone_model: z.string().trim().min(1).max(80).optional(),
-  altitude_m: z.coerce.number().min(5).max(500).nullish(),
-  gsd_cm_per_px: z.coerce.number().min(0.1).max(100).nullish(),
+  altitude_m: z.number().finite().min(5).max(500).nullish(),
+  gsd_cm_per_px: z.number().finite().min(0.1).max(100).nullish(),
   notes: z.string().trim().max(2000).nullish(),
 });
 export type FlightCreateInput = z.infer<typeof FlightCreate>;
@@ -234,8 +237,8 @@ export const FlightPatch = z.strictObject({
   flown_at: IsoDate.optional(),
   neighborhood: z.string().trim().min(1).max(80).optional(),
   drone_model: z.string().trim().min(1).max(80).optional(),
-  altitude_m: z.coerce.number().min(5).max(500).nullable().optional(),
-  gsd_cm_per_px: z.coerce.number().min(0.1).max(100).nullable().optional(),
+  altitude_m: z.number().finite().min(5).max(500).nullable().optional(),
+  gsd_cm_per_px: z.number().finite().min(0.1).max(100).nullable().optional(),
   notes: z.string().trim().max(2000).nullable().optional(),
 });
 export type FlightPatchInput = z.infer<typeof FlightPatch>;
@@ -243,8 +246,4 @@ export type FlightPatchInput = z.infer<typeof FlightPatch>;
 export const LoginBody = z.strictObject({
   email: z.string().trim().email().max(254),
   password: z.string().min(1).max(256),
-});
-
-export const SetPasswordBody = z.strictObject({
-  password: z.string().min(12).max(256),
 });

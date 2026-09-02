@@ -128,8 +128,11 @@ Batch a whole flight (uploads to Storage and upserts scans):
 
 ```bash
 cp .env.example .env      # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, optional DASHBOARD_URL + HAWKEYE_PIPELINE_TOKEN
-python run_pipeline.py --flight-code FLT-2026-W35-OAKWOOD --data-dir data/ [--verbose]
+python run_pipeline.py --flight-code FLT-2026-W35-OAKWOOD --data-dir data/ [--gsd-cm 2.5] [--verbose]
 ```
+
+`--gsd-cm` is the fallback ground sampling distance when the flight row has no
+`gsd_cm_per_px`; `/flights/<id>` prints the exact command for each sortie.
 
 The runner looks every parcel up in one query, skips unknown parcels and
 missing pairs, keeps going past a failed parcel, and prints a summary
@@ -191,7 +194,9 @@ amber `DEV MODE · no auth · mock data` badge in the header, and mock data.
   JSON; pages redirect to `/login?next=`.
 - **CSRF**: cookie-authenticated mutations must come from the same origin
   (`Sec-Fetch-Site` / `Origin` are checked; set `TRUST_PROXY=1` behind
-  Vercel/nginx so the forwarded host is trusted) and carry
+  Vercel/nginx so the forwarded host is trusted — only the hop your own proxy
+  appended, i.e. the last `x-forwarded-*` entry or the `TRUST_PROXY_HOPS`-th
+  from the right, never the client-controlled first one) and carry
   `Content-Type: application/json` — the two exceptions are a body-less
   `DELETE` and the `multipart/form-data` / `text/csv` / `application/geo+json`
   bodies of `POST /api/properties/import`. A cross-site form can produce none
@@ -231,20 +236,26 @@ Redirect URL `<origin>/auth/confirm`; Invite / Reset e-mail templates linking to
   land in `property_verifications` and are audited as `property.verified`;
   `false_positive` and `occupied` return the parcel to `active`, clear
   `first_flagged_at` and set `snoozed_until = now + 8 weeks`, during which the
-  `auto_flag_property()` trigger will not re-flag it. Dispatch is disabled while
-  the verdict is anything but `verified_vacant`.
-- **Distress sweep** — `POST|GET /api/automation/sweep` evaluates enabled
+  `auto_flag_property()` trigger will not re-flag it. Manual dispatch (the
+  detail-page button and `POST /api/dispatch`) requires a `flagged` lead whose
+  verdict is `verified_vacant` — no verdict is not enough; only the sweep
+  below auto-dispatches unverified flagged leads.
+- **Distress sweep** — `POST /api/automation/sweep` evaluates enabled
   `distress_threshold` rules against flagged parcels past `min_days` (skipping
-  parcels whose verdict is anything but `verified_vacant`), once per
-  (rule, parcel) via `automation_rule_firings`. Only a rule whose action
+  parcels with a recorded verdict other than `verified_vacant`; unverified
+  flagged leads are dispatched), once per (rule, parcel) via
+  `automation_rule_firings`. Only a rule whose action
   actually succeeded is ledgered, and a parcel is marked `dispatched` only
   when its `dispatch_webhook` delivery returned 2xx — a CRM outage, timeout or
   missing webhook URL leaves the lead flagged (`webhook.failed` in the audit
   stream, `failed` in the sweep summary) so the next sweep retries it.
   Accepted callers: `Authorization: Bearer $CRON_SECRET` (Vercel Cron sends it
-  automatically; `dashboard/vercel.json` schedules it daily at 13:00 UTC) or an
-  `admin` session — the `Run sweep now` button on `/automation` uses the
-  latter, whether or not `CRON_SECRET` is set. Plain cron alternative:
+  automatically with a GET; `dashboard/vercel.json` schedules it daily at
+  13:00 UTC) or an `admin` session, which must `POST` (a cookie GET is a
+  top-level navigation and is refused with 405) — the `Run sweep now` button
+  on `/automation` uses the latter, whether or not `CRON_SECRET` is set. In
+  mock mode webhooks are never delivered, even with `CRM_WEBHOOK_URL` set.
+  Plain cron alternative:
   `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/automation/sweep`.
 - **Flights** — create the flight row on `/flights` before running the pipeline;
   `/flights/[id]` lists what it processed and prints the exact

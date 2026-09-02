@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { ArrowUpDown, Car, Filter, Search, Sprout, X } from "lucide-react";
 import { DISTRESS_THRESHOLD_DAYS, type LeadStatus, type PropertyLead } from "@/lib/types";
+import { AUTO_FLAG_CONFIDENCE } from "@/lib/constants";
 import { fmtDate, fmtDateTime, fmtRelative } from "@/lib/format";
 import { useNow } from "@/lib/ui/useNow";
 import { LEAD_STATUS } from "@/lib/ui/status";
@@ -32,6 +33,16 @@ const COLUMNS: { key: SortKey; label: string; className?: string; numeric?: bool
 
 function parseStatus(v: string | null): StatusFilter {
   return (STATUS_FILTERS as readonly string[]).includes(v ?? "") ? (v as StatusFilter) : "all";
+}
+
+const DEFAULT_SORT: { key: SortKey; dir: SortDir } = { key: "confidence", dir: "desc" };
+const SORT_KEYS = COLUMNS.map((c) => c.key);
+
+function parseSort(sort: string | null, dir: string | null): { key: SortKey; dir: SortDir } {
+  const key = (SORT_KEYS as readonly string[]).includes(sort ?? "")
+    ? (sort as SortKey)
+    : DEFAULT_SORT.key;
+  return { key, dir: dir === "asc" || dir === "desc" ? dir : DEFAULT_SORT.dir };
 }
 
 const num = (v: number | null | undefined) => (v == null ? -Infinity : v);
@@ -66,24 +77,27 @@ export function PropertyGrid({
   const sp = useSearchParams();
   const now = useNow(60_000);
 
-  // URL is the source of truth for status/over; the search box is local and
-  // syncs to the URL (debounced, without a server round-trip).
+  // URL is the source of truth for status/over/sort; the search box is local
+  // and syncs to the URL (debounced, without a server round-trip).
   const status = parseStatus(sp.get("status"));
   const over = sp.get("over") === "1";
+  const { key: sortKey, dir: sortDir } = parseSort(sp.get("sort"), sp.get("dir"));
   const [query, setQuery] = useState(sp.get("q") ?? "");
-  const [sortKey, setSortKey] = useState<SortKey>("confidence");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const buildUrl = useCallback(
-    (s: StatusFilter, o: boolean, q: string) => {
+    (s: StatusFilter, o: boolean, q: string, sort = { key: sortKey, dir: sortDir }) => {
       const p = new URLSearchParams();
       if (s !== "all") p.set("status", s);
       if (o) p.set("over", "1");
       if (q.trim()) p.set("q", q.trim());
+      if (sort.key !== DEFAULT_SORT.key || sort.dir !== DEFAULT_SORT.dir) {
+        p.set("sort", sort.key);
+        p.set("dir", sort.dir);
+      }
       const qs = p.toString();
       return qs ? `${pathname}?${qs}` : pathname;
     },
-    [pathname],
+    [pathname, sortKey, sortDir],
   );
 
   const setStatus = (s: StatusFilter) =>
@@ -91,7 +105,7 @@ export function PropertyGrid({
   const setOver = (o: boolean) => router.replace(buildUrl(status, o, query), { scroll: false });
   const clearFilters = () => {
     setQuery("");
-    router.replace(pathname, { scroll: false });
+    router.replace(buildUrl("all", false, "", DEFAULT_SORT), { scroll: false });
   };
 
   useEffect(() => {
@@ -123,13 +137,13 @@ export function PropertyGrid({
     });
   }, [leads, query, status, over, sortKey, sortDir]);
 
+  // Sort lives in the URL (?sort=&dir=) so a reload or a shared link keeps it.
   function toggleSort(key: SortKey) {
-    if (key === sortKey) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir(key === "address" || key === "status" ? "asc" : "desc");
-    }
+    const next: { key: SortKey; dir: SortDir } =
+      key === sortKey
+        ? { key, dir: sortDir === "asc" ? "desc" : "asc" }
+        : { key, dir: key === "address" || key === "status" ? "asc" : "desc" };
+    router.replace(buildUrl(status, over, query, next), { scroll: false });
   }
 
   return (
@@ -344,8 +358,8 @@ export function PropertyGrid({
           <Car className="h-3.5 w-3.5 text-sky-400" aria-hidden /> vehicle on parcel
         </span>
         <span className="inline-flex items-center gap-1">
-          <span className="inline-block h-2 w-px bg-slate-300/70" aria-hidden /> auto-flag tick at
-          75
+          <span className="inline-block h-2 w-px bg-slate-300/70" aria-hidden /> auto-flag tick at{" "}
+          {AUTO_FLAG_CONFIDENCE}
         </span>
       </div>
     </section>

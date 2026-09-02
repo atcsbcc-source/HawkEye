@@ -77,4 +77,42 @@ describe("evaluateRules (mock mode)", () => {
       true,
     );
   });
+
+  it("re-flagging an already flagged / unknown / snoozed parcel is a skipped no-op", async () => {
+    const payload = { property_id: "m5", vacancy_confidence: 90 };
+    await evaluateRules("scan_processed", payload);
+    const second = await evaluateRules("scan_processed", payload);
+    expect(second.fired).toEqual([]);
+    expect(second.outcomes).toEqual([expect.objectContaining({ ok: true, skipped: true })]);
+
+    const unknown = await evaluateRules("scan_processed", { ...payload, property_id: "zzz" });
+    expect(unknown.fired).toEqual([]);
+    expect(unknown.outcomes[0].skipped).toBe(true);
+
+    const rule = (await listRules()).find((r) => r.id === DEFAULT_RULE_IDS.flag)!;
+    expect(rule.fireCount).toBe(1);
+    const events = await listEvents();
+    expect(events.filter((e) => e.eventType === "property.flagged")).toHaveLength(1);
+    expect(events.filter((e) => e.eventType === "rule.fired")).toHaveLength(1);
+  });
+
+  it("mock mode never delivers a webhook even when CRM_WEBHOOK_URL is set", async () => {
+    process.env.CRM_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/1/review";
+    await setRuleEnabled(DEFAULT_RULE_IDS.dispatch, true);
+    const result = await evaluateRules("distress_threshold", {
+      property_id: "m1",
+      days_distressed: 94,
+    });
+    expect(result.fired).toEqual([]);
+    expect(result.outcomes).toEqual([
+      expect.objectContaining({
+        ok: false,
+        kind: "mock_mode",
+        error: expect.stringMatching(/mock/),
+      }),
+    ]);
+    const events = await listEvents();
+    expect(events.some((e) => e.eventType === "webhook.delivered")).toBe(false);
+    expect(events.some((e) => e.eventType === "webhook.failed")).toBe(true);
+  });
 });

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clientIp,
+  forwardedHop,
   rateLimit,
   rateLimitResponse,
   resetRateLimits,
@@ -62,11 +63,45 @@ describe("clientIp", () => {
     expect(clientIp(req)).toBe("direct");
   });
 
-  it("uses only the first hop when TRUST_PROXY=1", () => {
+  it("uses the hop appended by our proxy (the last one) when TRUST_PROXY=1", () => {
     process.env.TRUST_PROXY = "1";
     const req = new Request("https://h.example/api", {
       headers: { "x-forwarded-for": "203.0.113.9, 10.0.0.1" },
     });
-    expect(clientIp(req)).toBe("203.0.113.9");
+    expect(clientIp(req)).toBe("10.0.0.1");
+    const single = new Request("https://h.example/api", {
+      headers: { "x-forwarded-for": "203.0.113.9" },
+    });
+    expect(clientIp(single)).toBe("203.0.113.9");
+  });
+
+  it("a spoofed first hop cannot rotate the rate-limit subject", () => {
+    process.env.TRUST_PROXY = "1";
+    resetRateLimits();
+    let allowed = 0;
+    for (let i = 0; i < 50; i++) {
+      // nginx appends the real client IP after whatever the client sent.
+      const req = new Request("https://app/api/auth/login", {
+        method: "POST",
+        headers: { "x-forwarded-for": `10.${i}.${i}.${i}, 203.0.113.7` },
+      });
+      if (rateLimit("auth:login:ip", clientIp(req), 5).ok) allowed++;
+    }
+    expect(allowed).toBe(5);
+  });
+
+  it("honours TRUST_PROXY_HOPS for chained proxies", () => {
+    process.env.TRUST_PROXY = "1";
+    const prevHops = process.env.TRUST_PROXY_HOPS;
+    process.env.TRUST_PROXY_HOPS = "2";
+    try {
+      expect(forwardedHop("1.1.1.1, 203.0.113.7, 10.0.0.2")).toBe("203.0.113.7");
+      // Fewer entries than hops: fall back to the first (only) client-facing one.
+      expect(forwardedHop("203.0.113.7")).toBe("203.0.113.7");
+      expect(forwardedHop("")).toBeNull();
+    } finally {
+      if (prevHops === undefined) delete process.env.TRUST_PROXY_HOPS;
+      else process.env.TRUST_PROXY_HOPS = prevHops;
+    }
   });
 });

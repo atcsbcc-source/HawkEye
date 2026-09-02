@@ -6,17 +6,19 @@ import {
   type InvalidRow,
   type ParsedParcel,
 } from "@/lib/import/parse";
+import { upsertBatches } from "@/lib/import/upsert";
 import { mockFindByParcel, mockUpsertProperty } from "@/lib/server/mock-store";
 import { pushEvent } from "@/lib/server/ops";
 import { withAuth } from "@/lib/server/auth";
 import { must } from "@/lib/server/db";
-import { apiError } from "@/lib/server/validate";
+import { apiError, BodyTooLarge, readCappedBytes } from "@/lib/server/validate";
 import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const BATCH = 500;
+const TOO_LARGE = "File exceeds the 5 MB import limit";
 
 /**
  * POST /api/properties/import[?dryRun=1]
@@ -34,26 +36,34 @@ export const POST = withAuth(async (req, user) => {
   const dryRun = ["1", "true"].includes(url.searchParams.get("dryRun") ?? "");
 
   const declared = Number(req.headers.get("content-length") ?? 0);
-  if (declared > MAX_BYTES) return apiError("File exceeds the 5 MB import limit", 413);
+  if (declared > MAX_BYTES) return apiError(TOO_LARGE, 413);
 
   let text: string;
   let filename: string | undefined;
   const contentType = req.headers.get("content-type") ?? "";
   try {
+    // Stream with a hard cap: a chunked (Content-Length-less) upload must not
+    // be buffered in full by req.text() / req.formData() before the size check.
+    // (Self-hosted `next start` still tees every mutating body for the
+    // middleware sandbox — next/dist/server/body-streams.js — which is a
+    // per-request framework cost outside this handler; Vercel caps bodies at
+    // 4.5 MB before the function runs.)
+    const bytes = await readCappedBytes(req, MAX_BYTES);
     if (contentType.includes("multipart/form-data")) {
-      const form = await req.formData();
+      const form = await new Response(bytes, {
+        headers: { "content-type": contentType },
+      }).formData();
       const file = form.get("file");
       if (!(file instanceof Blob)) {
         return apiError("multipart body must include a `file` field", 400);
       }
-      if (file.size > MAX_BYTES) return apiError("File exceeds the 5 MB import limit", 413);
       filename = (file as File).name;
       text = await file.text();
     } else {
-      text = await req.text();
-      if (text.length > MAX_BYTES) return apiError("File exceeds the 5 MB import limit", 413);
+      text = new TextDecoder().decode(bytes);
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof BodyTooLarge) return apiError(TOO_LARGE, 413);
     return apiError("Could not read upload", 400);
   }
   if (!text.trim()) return apiError("Empty upload", 400);
@@ -90,31 +100,28 @@ export const POST = withAuth(async (req, user) => {
   if (dryRun) return NextResponse.json(summary);
 
   if (db) {
-    for (let i = 0; i < rows.length; i += BATCH) {
-      const batch = rows.slice(i, i + BATCH).map((r) => ({
-        parcel_id: r.parcel_id,
-        address: r.address,
-        lat: r.lat,
-        lng: r.lng,
-        neighborhood: r.neighborhood,
-        // Blank cells keep the existing note (mock-store mirrors this).
-        ...(r.notes ? { notes: r.notes } : {}),
-        archived_at: null,
-      }));
+    // Blank note cells keep the existing note (mock-store mirrors this): rows
+    // with and without `notes` go in separate batches so postgrest never sends
+    // `notes: null` for the note-less ones.
+    const batches = upsertBatches(rows, BATCH);
+    let imported = 0;
+    for (let n = 0; n < batches.length; n++) {
+      const batch = batches[n];
       const { error } = await db.from("properties").upsert(batch, { onConflict: "parcel_id" });
       if (error) {
-        console.error("[import] batch failed", i / BATCH + 1, error.code);
+        console.error("[import] batch failed", n + 1, error.code);
         return NextResponse.json(
-          { error: `Batch ${i / BATCH + 1} failed; ${i} rows were imported`, imported: i },
+          { error: `Batch ${n + 1} failed; ${imported} rows were imported`, imported },
           { status: 500 },
         );
       }
+      imported += batch.length;
     }
   } else {
     for (const r of rows) mockUpsertProperty(r);
   }
 
-  pushEvent({
+  await pushEvent({
     actor: user.email,
     actorUserId: user.id,
     eventType: "property.imported",

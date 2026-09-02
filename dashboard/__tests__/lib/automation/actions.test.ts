@@ -101,9 +101,44 @@ describe("executeAction / flag_property", () => {
       deps,
     );
     expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
     expect(result.eventType).toBeUndefined();
     expect(result.detail.skipped).toBe("no database");
     expect(deps.calls).toHaveLength(0);
+  });
+
+  it("reports a store-backed no-op as skipped and a transition as a firing", async () => {
+    const flagRule = rule({ actionType: "flag_property", triggerType: "scan_processed" });
+    const payload = { property_id: "p1", vacancy_confidence: 99 };
+
+    const already = await executeAction(flagRule, payload, {
+      ...recordingDeps(),
+      flagWithoutDb: () => "already_flagged",
+    });
+    expect(already).toMatchObject({
+      ok: true,
+      skipped: true,
+      detail: { skipped: "already flagged" },
+    });
+    expect(already.eventType).toBeUndefined();
+
+    const unknown = await executeAction(flagRule, payload, {
+      ...recordingDeps(),
+      flagWithoutDb: () => "not_flaggable",
+    });
+    expect(unknown).toMatchObject({
+      ok: true,
+      skipped: true,
+      detail: { skipped: "not flaggable" },
+    });
+
+    const flagged = await executeAction(flagRule, payload, {
+      ...recordingDeps(),
+      flagWithoutDb: () => "flagged",
+    });
+    expect(flagged.ok).toBe(true);
+    expect(flagged.skipped).toBeUndefined();
+    expect(flagged.eventType).toBe("property.flagged");
   });
 });
 

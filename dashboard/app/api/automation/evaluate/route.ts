@@ -35,6 +35,16 @@ export async function POST(req: NextRequest) {
   if (!body.ok) return body.res;
   const { trigger, payload } = body.data;
 
+  // distress_threshold rules only run from the ledgered sweep: evaluating them
+  // here would bypass automation_rule_firings and the `dispatched` flip, so a
+  // lead could be delivered to the CRM on every call.
+  if (trigger === "distress_threshold") {
+    return NextResponse.json(
+      { error: "distress_threshold rules run from POST /api/automation/sweep (ledgered)" },
+      { status: 400 },
+    );
+  }
+
   // Forward only the allowlisted projection — never the raw object.
   const projected: Record<string, unknown> = {};
   for (const key of [

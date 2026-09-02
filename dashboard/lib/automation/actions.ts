@@ -1,12 +1,16 @@
 /**
  * Rule actions with injected side effects. Nothing here imports lib/supabase
- * or lib/server so the module stays unit-testable; the server passes real
- * dependencies via `defaultActionDeps(db)`.
+ * or lib/server so the module stays unit-testable; the server
+ * (lib/server/rules.ts) injects the real dependencies — the SSRF-safe, signed
+ * `postJson` from lib/server/safe-fetch and the mock-store flagger.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AUTO_FLAG_CONFIDENCE } from "../constants";
 import type { AutomationRule } from "../ops-types";
 import { num } from "./evaluate";
+
+/** Result of a store-backed flag attempt (mock mode). */
+export type FlagOutcome = "flagged" | "already_flagged" | "not_flaggable";
 
 export interface ActionDeps {
   db: SupabaseClient | null;
@@ -15,40 +19,29 @@ export interface ActionDeps {
   /**
    * Optional store-backed flagger used when `db` is null (mock mode), so the
    * scan -> auto-flag -> sweep routine works end-to-end without Supabase.
-   * Returns false when the parcel is unknown, dispatched or snoozed.
+   * `not_flaggable` covers unknown, archived, dispatched and snoozed parcels.
    */
-  flagWithoutDb?: (propertyId: string) => boolean;
+  flagWithoutDb?: (propertyId: string) => FlagOutcome;
 }
 
 export interface ActionResult {
   ok: boolean;
+  /**
+   * True when the action ran but changed nothing (parcel already flagged,
+   * unknown, snoozed, below threshold). Not a firing: callers must not bump
+   * fire_count or audit it as one.
+   */
+  skipped?: boolean;
   /** Optional audit event describing the side effect (emitted by the caller). */
   eventType?: string;
   detail: Record<string, unknown>;
 }
 
-export const WEBHOOK_TIMEOUT_MS = 8_000;
-
-/**
- * Plain-fetch webhook poster: bounded by a timeout, never follows redirects.
- * Used only by tests / `defaultActionDeps`; the server (lib/server/rules.ts)
- * injects lib/server/safe-fetch's `postJson`, which validates the URL against
- * private/loopback ranges (SSRF) and signs the body before posting.
- */
-export async function defaultPostJson(url: string, body: unknown): Promise<{ status: number }> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    redirect: "error",
-    signal: AbortSignal.timeout(WEBHOOK_TIMEOUT_MS),
-  });
-  return { status: res.status };
-}
-
-export function defaultActionDeps(db: SupabaseClient | null): ActionDeps {
-  return { db, postJson: defaultPostJson };
-}
+const skip = (detail: Record<string, unknown>): ActionResult => ({
+  ok: true,
+  skipped: true,
+  detail,
+});
 
 /** Execute a rule's action. Reports failures in the result; only throws on DB errors. */
 export async function executeAction(
@@ -77,19 +70,18 @@ async function flagProperty(
 ): Promise<ActionResult> {
   const propertyId = payload.property_id;
   if (typeof propertyId !== "string" || !propertyId) {
-    return { ok: true, detail: { skipped: "no property_id" } };
+    return skip({ skipped: "no property_id" });
   }
   const min = num(rule.triggerConfig.min_confidence, AUTO_FLAG_CONFIDENCE);
   if (!db) {
-    if (!flagWithoutDb) return { ok: true, detail: { skipped: "no database" } };
+    if (!flagWithoutDb) return skip({ skipped: "no database" });
     // Mock mode has no scan table to re-read; the payload confidence is the
     // only signal and the trigger condition already checked it against `min`.
     const confidence = num(payload.vacancy_confidence, -1);
-    if (confidence < min) {
-      return { ok: true, detail: { skipped: "below threshold", confidence, min } };
-    }
-    if (!flagWithoutDb(propertyId)) {
-      return { ok: true, detail: { skipped: "not flaggable", property_id: propertyId } };
+    if (confidence < min) return skip({ skipped: "below threshold", confidence, min });
+    const outcome = flagWithoutDb(propertyId);
+    if (outcome !== "flagged") {
+      return skip({ skipped: outcome.replace("_", " "), property_id: propertyId });
     }
     return {
       ok: true,
@@ -108,15 +100,44 @@ async function flagProperty(
     .maybeSingle();
   if (scanErr) throw new Error(`select property_scans: ${scanErr.message}`);
   const confidence = num(scan?.vacancy_confidence, -1);
-  if (confidence < min) {
-    return { ok: true, detail: { skipped: "below threshold", confidence, min } };
-  }
-  const { error } = await db
+  if (confidence < min) return skip({ skipped: "below threshold", confidence, min });
+
+  // Same predicate as the auto_flag_property() trigger: never touch archived,
+  // dispatched or snoozed parcels, and never re-flag one already flagged.
+  const { data: current, error: curErr } = await db
     .from("properties")
-    .update({ status: "flagged" })
+    .select("status, first_flagged_at, archived_at, snoozed_until")
     .eq("id", propertyId)
-    .neq("status", "dispatched");
+    .maybeSingle();
+  if (curErr) throw new Error(`select properties: ${curErr.message}`);
+  const nowMs = Date.now();
+  if (!current || current.archived_at) {
+    return skip({ skipped: "not flaggable", property_id: propertyId });
+  }
+  if (current.status === "flagged") {
+    return skip({ skipped: "already flagged", property_id: propertyId });
+  }
+  if (current.status === "dispatched") {
+    return skip({ skipped: "not flaggable", property_id: propertyId, status: current.status });
+  }
+  if (current.snoozed_until && new Date(current.snoozed_until).getTime() > nowMs) {
+    return skip({ skipped: "snoozed", property_id: propertyId, until: current.snoozed_until });
+  }
+  const { data: updated, error } = await db
+    .from("properties")
+    .update({
+      status: "flagged",
+      first_flagged_at: current.first_flagged_at ?? new Date(nowMs).toISOString(),
+    })
+    .eq("id", propertyId)
+    .eq("status", current.status)
+    .is("archived_at", null)
+    .select("id");
   if (error) throw new Error(`update properties: ${error.message}`);
+  if (!updated || updated.length === 0) {
+    // Lost a race with the trigger / an operator verdict — nothing changed here.
+    return skip({ skipped: "not flaggable", property_id: propertyId });
+  }
   return {
     ok: true,
     eventType: "property.flagged",

@@ -48,10 +48,16 @@ async function PropertyBody({ lead }: { lead: PropertyLead }) {
 
   const overThreshold = (lead.days_distressed ?? 0) >= DISTRESS_THRESHOLD_DAYS;
   const alreadyDispatched = lead.status === "dispatched";
-  const dispatchDisabledReason =
-    lead.verification && lead.verification !== "verified_vacant"
-      ? `Verdict is ${VERDICT_LABEL[lead.verification]} — mark Verified vacant to enable dispatch`
-      : null;
+  // Mirrors the gate in app/api/dispatch: flagged + verified_vacant only.
+  const dispatchDisabledReason = alreadyDispatched
+    ? null
+    : lead.status !== "flagged"
+      ? "Parcel is not flagged — only flagged leads can be dispatched"
+      : lead.verification !== "verified_vacant"
+        ? lead.verification
+          ? `Verdict is ${VERDICT_LABEL[lead.verification]} — mark Verified vacant to enable dispatch`
+          : "No verdict yet — mark Verified vacant to enable dispatch"
+        : null;
   const osmUrl = `https://www.openstreetmap.org/?mlat=${lead.lat}&mlon=${lead.lng}#map=19/${lead.lat}/${lead.lng}`;
 
   return (

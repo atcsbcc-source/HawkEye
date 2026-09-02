@@ -23,7 +23,7 @@ const LINK_PILL: Record<LinkState, { label: string; className: string }> = {
   stale: { label: "Stale", className: "bg-red-500/15 text-red-300" },
 };
 
-// Battery / link warning bands (integrator swaps for lib/constants.ts).
+// Battery / link warning bands.
 const BATTERY_WARN = 40;
 const BATTERY_CRIT = LOW_BATTERY_PCT;
 const LINK_WARN = LOW_LINK_PCT;

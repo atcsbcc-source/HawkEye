@@ -20,10 +20,11 @@ export const dynamic = "force-dynamic";
  * `dispatched` only when a dispatch_webhook action was actually delivered
  * (2xx); failed deliveries leave it flagged so the next sweep retries.
  *
- * Callers: Vercel Cron with `Authorization: Bearer $CRON_SECRET`, or an admin
- * session from the console's "Run sweep now" button (middleware performs the
- * CSRF checks for cookie sessions). Both work regardless of whether
- * CRON_SECRET is configured.
+ * Callers: Vercel Cron with `Authorization: Bearer $CRON_SECRET` (it issues a
+ * GET), or an admin session from the console's "Run sweep now" button, which
+ * must POST — a cookie-authenticated GET is a top-level navigation the
+ * middleware CSRF rules do not cover, so it is refused with 405. Both work
+ * regardless of whether CRON_SECRET is configured.
  */
 export async function POST(req: NextRequest) {
   return handle(req);
@@ -39,6 +40,12 @@ async function handle(req: NextRequest) {
   if (token) {
     subject = `token:${token.name}`;
   } else {
+    if (req.method !== "POST") {
+      return NextResponse.json(
+        { error: "Use POST (GET is reserved for the cron bearer token)" },
+        { status: 405, headers: { allow: "POST" } },
+      );
+    }
     try {
       const user = await requireUser({ role: "admin" });
       subject = `user:${user.id}`;
@@ -69,9 +76,17 @@ interface SweepResult {
   failed: number;
   skipped: number;
   dispatched: number;
+  /** Distinct failure reasons behind `failed`, most frequent first. */
+  failures: SweepFailure[];
   minDays: number | null;
   rules: number;
   ranAt: string;
+}
+
+interface SweepFailure {
+  reason: string;
+  kind: string | null;
+  count: number;
 }
 
 interface Candidate {
@@ -87,8 +102,10 @@ async function runSweep(): Promise<SweepResult> {
   const rules = (await listRules()).filter(
     (r) => r.enabled && r.triggerType === "distress_threshold",
   );
-  const emit = (r: SweepResult) => {
-    pushEvent({
+  // Awaited so the automation.sweep row (SweepBar's "Last sweep") is written
+  // before the function returns — Vercel may freeze it right after the response.
+  const emit = async (r: SweepResult) => {
+    await pushEvent({
       actor: "system",
       eventType: "automation.sweep",
       subjectType: "rule",
@@ -99,6 +116,7 @@ async function runSweep(): Promise<SweepResult> {
         failed: r.failed,
         skipped: r.skipped,
         dispatched: r.dispatched,
+        failures: r.failures,
         minDays: r.minDays,
       },
     });
@@ -112,6 +130,7 @@ async function runSweep(): Promise<SweepResult> {
       failed: 0,
       skipped: 0,
       dispatched: 0,
+      failures: [],
       minDays: null,
       rules: 0,
       ranAt,
@@ -176,6 +195,7 @@ async function runSweep(): Promise<SweepResult> {
   let failed = 0;
   let skipped = 0;
   let dispatched = 0;
+  const failures = new Map<string, SweepFailure>();
 
   for (const c of candidates) {
     const applicable = rules.filter((r) => c.days_distressed >= minDaysOf(r));
@@ -198,9 +218,17 @@ async function runSweep(): Promise<SweepResult> {
       },
       { only: pending.map((r) => r.id) },
     );
-    const succeeded = result.outcomes.filter((o) => o.ok);
+    // A skipped no-op is neither a firing nor a failure and is not ledgered.
+    const succeeded = result.outcomes.filter((o) => o.ok && !o.skipped);
     fired += succeeded.length;
-    failed += result.outcomes.length - succeeded.length;
+    for (const o of result.outcomes) {
+      if (o.ok) continue;
+      failed++;
+      const reason = o.error ?? "action failed";
+      const f = failures.get(reason) ?? { reason, kind: o.kind ?? null, count: 0 };
+      f.count++;
+      failures.set(reason, f);
+    }
 
     if (succeeded.length > 0) {
       if (db) {
@@ -239,6 +267,7 @@ async function runSweep(): Promise<SweepResult> {
     failed,
     skipped,
     dispatched,
+    failures: Array.from(failures.values()).sort((a, b) => b.count - a.count),
     minDays,
     rules: rules.length,
     ranAt,

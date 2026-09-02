@@ -51,6 +51,13 @@ export function fmtLongDate(d: DateInput): string {
   }).format(t);
 }
 
+/** `Aug 31, 2026` — tables and snooze dates where the year matters. */
+export function fmtFullDate(d: DateInput): string {
+  const t = toMs(d);
+  if (t === null) return "—";
+  return dtf("full", { month: "short", day: "numeric", year: "numeric" }).format(t);
+}
+
 /** `Aug 31 · 14:05` */
 export function fmtDateTime(d: DateInput): string {
   const t = toMs(d);

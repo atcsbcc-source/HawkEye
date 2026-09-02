@@ -92,7 +92,7 @@ export const POST = withAuth(async (req, user) => {
     }
   }
 
-  pushEvent({
+  await pushEvent({
     actor: user.email,
     actorUserId: user.id,
     eventType: restored ? "property.restored" : "property.created",

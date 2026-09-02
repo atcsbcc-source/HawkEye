@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { FileUp, Loader2, X } from "lucide-react";
+import { useFocusTrap } from "@/lib/ui/useFocusTrap";
 
 interface Preview {
   new: number;
@@ -30,8 +31,11 @@ const TITLE_ID = "import-parcels-title";
  */
 export function ImportDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const dialogRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  // Tab never leaves the modal (the grid behind the backdrop stays unreachable).
+  useFocusTrap(dialogRef);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [state, setState] = useState<"idle" | "previewing" | "importing" | "done" | "error">(
@@ -102,6 +106,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={TITLE_ID}
@@ -117,8 +122,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             </p>
             <p className="mt-1 text-xs text-slate-400">
               CSV with{" "}
-              <code className="text-slate-300">parcel_id,address,lat,lng[,neighborhood]</code> or a
-              GeoJSON FeatureCollection (Point or Polygon features). Existing parcel IDs are
+              <code className="text-slate-300">parcel_id,address,lat,lng[,neighborhood,notes]</code>{" "}
+              or a GeoJSON FeatureCollection (Point or Polygon features). Existing parcel IDs are
               updated. Max 5 MB.
             </p>
           </div>

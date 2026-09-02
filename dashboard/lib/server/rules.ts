@@ -176,16 +176,33 @@ export interface RuleOutcome {
   actionType: AutomationRule["actionType"];
   /** Whether the action succeeded (a webhook 2xx, a flag applied, a notify). */
   ok: boolean;
+  /** ok but nothing changed (already flagged, unknown/snoozed parcel, below threshold). */
+  skipped?: boolean;
+  /** Failure reason for a failed action (webhook error, no URL, mock mode). */
+  error?: string;
+  /** Failure class from safe-fetch / the action (unconfigured|unsafe_url|timeout|network|http|mock_mode). */
+  kind?: string;
 }
 
 export interface EvaluationResult {
   /** Enabled rules bound to this trigger. */
   matched: number;
-  /** Names of the rules whose condition held and whose action succeeded. */
+  /** Names of the rules whose condition held and whose action actually applied a side effect. */
   fired: string[];
-  /** Per-rule result for every rule whose condition held (ok and failed). */
+  /** Per-rule result for every rule whose condition held (ok, skipped and failed). */
   outcomes: RuleOutcome[];
 }
+
+/**
+ * Mock mode never delivers a webhook: the seeded leads must not leave the
+ * process even when CRM_WEBHOOK_URL (or a rule URL) is configured — the same
+ * guard POST /api/dispatch applies with its 503.
+ */
+const mockModePostJson: ActionDeps["postJson"] = async () => {
+  throw Object.assign(new Error("mock mode: webhooks are not delivered without Supabase"), {
+    kind: "mock_mode",
+  });
+};
 
 export interface EvaluateOptions {
   /** Restrict evaluation to these rule ids (the sweep passes its pending set). */
@@ -205,9 +222,10 @@ export async function evaluateRules(
   const { candidates, firing } = selectFiringRules(rules, trigger, payload);
   // Webhooks go through the SSRF-safe, signed, timeout-bounded poster
   // (assertSafeWebhookUrl runs inside safePostJson before every request).
+  const db = getServiceSupabase();
   const deps: ActionDeps = {
-    db: getServiceSupabase(),
-    postJson: safePostJson,
+    db,
+    postJson: db ? safePostJson : mockModePostJson,
     flagWithoutDb: mockFlagProperty,
   };
   const fired: string[] = [];
@@ -215,9 +233,26 @@ export async function evaluateRules(
 
   for (const rule of firing) {
     const result = await executeAction(rule, payload, deps);
-    outcomes.push({ id: rule.id, name: rule.name, actionType: rule.actionType, ok: result.ok });
-    // A failed action (webhook 5xx, timeout, no URL) is not a firing: leave
-    // fire_count alone so the ledger and counters only reflect real deliveries.
+    const outcome: RuleOutcome = {
+      id: rule.id,
+      name: rule.name,
+      actionType: rule.actionType,
+      ok: result.ok,
+    };
+    if (result.skipped) outcome.skipped = true;
+    if (!result.ok) {
+      if (typeof result.detail.error === "string") outcome.error = result.detail.error;
+      else if (typeof result.detail.status === "number")
+        outcome.error = `webhook responded ${result.detail.status}`;
+      if (typeof result.detail.kind === "string") outcome.kind = result.detail.kind;
+    }
+    outcomes.push(outcome);
+    // A no-op (parcel already flagged, unknown, snoozed, below threshold) is
+    // not a firing and leaves no audit trail: the counters only reflect real
+    // transitions.
+    if (result.skipped) continue;
+    // A failed action (webhook 5xx, timeout, no URL) is not a firing either:
+    // leave fire_count alone so the ledger and counters only reflect real deliveries.
     if (result.ok) {
       fired.push(rule.name);
       await recordRuleFired(rule);

@@ -39,11 +39,27 @@ export const OPTIONAL_COLUMNS = ["neighborhood", "notes"] as const;
 
 const trimmed = (max: number) => z.string().trim().min(1).max(max);
 
+/**
+ * CSV cells are strings: convert only when the cell is a plain decimal, so a
+ * boolean / array / null (GeoJSON properties) never reaches Number() and
+ * becomes 1 or 0. Numbers (GeoJSON coordinates) pass through unchanged.
+ */
+const DECIMAL_RE = /^-?\d+(\.\d+)?$/;
+const coordinate = (name: "lat" | "lng", min: number, max: number) =>
+  z.preprocess(
+    (v) => (typeof v === "string" && DECIMAL_RE.test(v.trim()) ? Number(v) : v),
+    z
+      .number({ error: `${name} must be a number` })
+      .finite()
+      .min(min)
+      .max(max),
+  );
+
 export const ParcelRowSchema = z.object({
   parcel_id: trimmed(64),
   address: trimmed(200),
-  lat: z.coerce.number().refine(Number.isFinite, "lat must be a number").min(-90).max(90),
-  lng: z.coerce.number().refine(Number.isFinite, "lng must be a number").min(-180).max(180),
+  lat: coordinate("lat", -90, 90),
+  lng: coordinate("lng", -180, 180),
   neighborhood: z.string().trim().max(80).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
 });

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { FlightSummary } from "@/lib/types";
+import { fmtFullDate } from "@/lib/format";
 
 /** Sortie table for /flights. Server component — data comes from fetchFlights(). */
 export function FlightTable({ flights }: { flights: FlightSummary[] }) {
@@ -39,9 +40,7 @@ export function FlightTable({ flights }: { flights: FlightSummary[] }) {
                     {f.flight_code}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-slate-300">
-                  {new Date(f.flown_at).toLocaleDateString()}
-                </td>
+                <td className="px-4 py-3 text-slate-300">{fmtFullDate(f.flown_at)}</td>
                 <td className="px-4 py-3 text-slate-300">{f.neighborhood}</td>
                 <td className="px-4 py-3 text-xs text-slate-400">{f.drone_model}</td>
                 <td className="px-4 py-3 text-right tabular-nums text-slate-300">

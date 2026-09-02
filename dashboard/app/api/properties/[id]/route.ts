@@ -51,7 +51,7 @@ export const PATCH = withAuth<Params>(async (req, user, { params }) => {
     if (!property) return apiError("Property not found", 404);
   }
 
-  pushEvent({
+  await pushEvent({
     actor: user.email,
     actorUserId: user.id,
     eventType: "property.updated",
@@ -85,7 +85,7 @@ export const DELETE = withAuth<Params>(async (_req, user, { params }) => {
     return apiError("Property not found", 404);
   }
 
-  pushEvent({
+  await pushEvent({
     actor: user.email,
     actorUserId: user.id,
     eventType: "property.archived",

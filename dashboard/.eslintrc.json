@@ -3,5 +3,31 @@
   "plugins": ["@typescript-eslint"],
   "rules": {
     "@typescript-eslint/no-explicit-any": "warn"
-  }
+  },
+  "overrides": [
+    {
+      "files": ["components/**/*.{ts,tsx}", "app/**/*.{ts,tsx}"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]",
+            "message": "Format dates with lib/format (fmtDate/fmtDateTime/fmtFullDate/...): they are pinned to OPS_TZ so SSR and every browser agree."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["app/api/**/*.ts", "lib/server/**/*.ts"],
+      "rules": {
+        "no-restricted-syntax": [
+          "error",
+          {
+            "selector": "ExpressionStatement > CallExpression[callee.name='pushEvent']",
+            "message": "Always `await pushEvent(...)`: the Supabase audit insert is only guaranteed when awaited (lib/server/audit.ts)."
+          }
+        ]
+      }
+    }
+  ]
 }

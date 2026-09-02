@@ -18,8 +18,7 @@ import { SkeletonRows } from "@/components/ui/Skeleton";
 import { RefreshBadge } from "@/components/ui/RefreshBadge";
 import { AuditFeed } from "./AuditFeed";
 
-// Defaults mirror the pipeline's auto-flag confidence and the distress window
-// (integrator swaps for lib/constants.ts).
+// Defaults mirror the pipeline's auto-flag confidence and the distress window.
 const DEFAULT_MIN_CONFIDENCE = AUTO_FLAG_CONFIDENCE;
 const DEFAULT_MIN_DAYS = DISTRESS_THRESHOLD_DAYS;
 

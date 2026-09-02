@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
+import { useFocusTrap } from "@/lib/ui/useFocusTrap";
 import { Brand, NavList } from "./Sidebar";
 
 const DRAWER_ID = "mobile-nav-drawer";
@@ -13,7 +14,10 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
+  // Tab cycles within the open drawer instead of reaching the page behind it.
+  useFocusTrap(drawerRef, open);
 
   // Close on route change.
   useEffect(() => {
@@ -67,6 +71,7 @@ export function MobileNav() {
               aria-hidden
             />
             <div
+              ref={drawerRef}
               id={DRAWER_ID}
               role="dialog"
               aria-modal="true"
