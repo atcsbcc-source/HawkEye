@@ -34,3 +34,6 @@ pipeline/debug_out/
 pipeline/data/
 pipeline/**/*.tif
 pipeline/**/*.tiff
+
+# Claude Code workflow worktrees (harness scratch, never commit)
+.claude/worktrees/

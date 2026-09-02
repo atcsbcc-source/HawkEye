@@ -163,7 +163,7 @@ npm run dev
   comparator, per-scan metrics, and a **Dispatch lead to CRM** action that
   POSTs to `CRM_WEBHOOK_URL` via `/api/dispatch` and marks the lead
   `dispatched`.
-- **Operations** (`/operations`) — dark tactical map (Leaflet/CARTO) of the
+- **Operations** (`/operations`) — dark tactical map (Leaflet + Esri dark canvas, satellite toggle) of the
   AO with parcel status markers, live 1 Hz aircraft telemetry over SSE
   (battery/alt/speed/heading/sats/link), and a mission tasking queue:
   create a grid mission over the AO, launch, watch progress, abort/RTB.

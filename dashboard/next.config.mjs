@@ -1,7 +1,6 @@
 const isProd = process.env.NODE_ENV === "production";
 const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
 const supabaseWs = supabaseUrl.replace(/^https:/, "wss:");
-const devMode = !supabaseUrl;
 
 const csp = [
   "default-src 'self'",
@@ -11,9 +10,8 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   [
     "img-src 'self' data: blob:",
-    "https://*.basemaps.cartocdn.com",
-    // picsum placeholders only exist in mock mode.
-    ...(devMode ? ["https://picsum.photos", "https://fastly.picsum.photos"] : []),
+    // Esri basemap tiles (dark canvas + satellite); mock imagery is served from /public.
+    "https://server.arcgisonline.com",
     ...(supabaseUrl ? [supabaseUrl] : []),
   ].join(" "),
   ["connect-src 'self'", ...(supabaseUrl ? [supabaseUrl, supabaseWs] : [])].join(" "),

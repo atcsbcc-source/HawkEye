@@ -10,12 +10,27 @@ import {
   Tooltip,
   useMap,
 } from "react-leaflet";
-import { LocateFixed } from "lucide-react";
+import { LocateFixed, Satellite, Map as MapIcon } from "lucide-react";
 import type { PropertyLead } from "@/lib/types";
 import type { Mission, Telemetry } from "@/lib/ops-types";
 import { AIRCRAFT_HEX, LEAD_STATUS, MISSION_AO_HEX } from "@/lib/ui/status";
 
 type LatLng = [number, number];
+
+/** Key-free Esri basemaps (CARTO's free tiles now watermark without an API key). */
+const BASEMAPS = {
+  dark: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri &mdash; Esri, HERE, Garmin, OpenStreetMap contributors",
+    maxNativeZoom: 16,
+  },
+  satellite: {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    attribution: "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+    maxNativeZoom: 19,
+  },
+} as const;
+type Basemap = keyof typeof BASEMAPS;
 
 /** Imperative camera moves driven by props (must live inside MapContainer). */
 function Camera({
@@ -62,6 +77,8 @@ export default function OpsMap({
   focusId?: string | null;
 }) {
   const [flyRequest, setFlyRequest] = useState(0);
+  const [basemap, setBasemap] = useState<Basemap>("dark");
+  const tiles = BASEMAPS[basemap];
 
   const center: LatLng =
     leads.length > 0
@@ -94,8 +111,11 @@ export default function OpsMap({
         attributionControl
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          key={basemap}
+          url={tiles.url}
+          attribution={tiles.attribution}
+          maxNativeZoom={tiles.maxNativeZoom}
+          maxZoom={19}
         />
         <Camera flyRequest={flyRequest} aircraft={aircraft} focus={focus} />
 
@@ -182,6 +202,20 @@ export default function OpsMap({
         className="btn-secondary absolute right-3 top-3 z-[1000] h-8 w-8 px-0 shadow-lg shadow-black/40"
       >
         <LocateFixed className="h-4 w-4" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={() => setBasemap((b) => (b === "dark" ? "satellite" : "dark"))}
+        aria-label={basemap === "dark" ? "Switch to satellite imagery" : "Switch to dark canvas"}
+        aria-pressed={basemap === "satellite"}
+        title={basemap === "dark" ? "Satellite imagery" : "Dark canvas"}
+        className="btn-secondary absolute right-3 top-12 z-[1000] h-8 w-8 px-0 shadow-lg shadow-black/40"
+      >
+        {basemap === "dark" ? (
+          <Satellite className="h-4 w-4" aria-hidden />
+        ) : (
+          <MapIcon className="h-4 w-4" aria-hidden />
+        )}
       </button>
 
       <div className="panel absolute bottom-6 left-3 z-[1000] px-3 py-2 font-mono text-[11px] text-slate-300 shadow-lg shadow-black/40">

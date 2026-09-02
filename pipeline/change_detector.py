@@ -271,10 +271,12 @@ def detect_vehicle_boxes(
 ) -> list[tuple[int, int, int, int]]:
     """Heuristic car detector: car-footprint, roughly rectangular blobs whose
     color stands out from the surrounding pavement (L* or chroma deviation from
-    the non-vegetated median). Color segmentation survives pavement-joint and
-    curb clutter that defeats edge-based contouring; its known blind spot is a
-    gray car on gray pavement — swap in a YOLO detector behind this signature
-    for production without touching callers."""
+    the non-vegetated median). Luminance and chroma are segmented separately so
+    a colored car parked against a roof shadow or a bright sidewalk is not fused
+    into them. Color segmentation survives pavement-joint and curb clutter that
+    defeats edge-based contouring; its known blind spot is a gray car on gray
+    pavement — swap in a YOLO detector behind this signature for production
+    without touching callers."""
     px_per_m = 100.0 / gsd_cm
     area_px = (VEHICLE_AREA_M2[0] * px_per_m**2, VEHICLE_AREA_M2[1] * px_per_m**2)
 
@@ -286,31 +288,34 @@ def detect_vehicle_boxes(
     chroma = np.abs(lab[:, :, 1] - 128) + np.abs(lab[:, :, 2] - 128)
     median_chroma = np.median(chroma[stat])
 
-    candidates = (
-        (np.abs(lab[:, :, 0] - median_l) > VEHICLE_L_DELTA)
-        | (chroma - median_chroma > VEHICLE_CHROMA_DELTA)
-    ) & stat
-
-    mask = candidates.astype(np.uint8) * 255
+    channels = (
+        np.abs(lab[:, :, 0] - median_l) > VEHICLE_L_DELTA,  # dark / bright bodies
+        chroma - median_chroma > VEHICLE_CHROMA_DELTA,  # colored bodies
+    )
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
+    boxes: list[tuple[int, int, int, int]] = []
+    for candidates in channels:
+        mask = (candidates & stat).astype(np.uint8) * 255
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=2)
 
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    boxes = []
-    for c in contours:
-        area = cv2.contourArea(c)
-        if not (area_px[0] <= area <= area_px[1]):
-            continue
-        (cx, cy), (rw, rh), _angle = cv2.minAreaRect(c)
-        if min(rw, rh) < 1:
-            continue
-        aspect = max(rw, rh) / min(rw, rh)
-        if not (VEHICLE_ASPECT[0] <= aspect <= VEHICLE_ASPECT[1]):
-            continue
-        if area / (rw * rh) < VEHICLE_RECTANGULARITY:
-            continue
-        boxes.append(tuple(cv2.boundingRect(c)))
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        for c in contours:
+            area = cv2.contourArea(c)
+            if not (area_px[0] <= area <= area_px[1]):
+                continue
+            (cx, cy), (rw, rh), _angle = cv2.minAreaRect(c)
+            if min(rw, rh) < 1:
+                continue
+            aspect = max(rw, rh) / min(rw, rh)
+            if not (VEHICLE_ASPECT[0] <= aspect <= VEHICLE_ASPECT[1]):
+                continue
+            if area / (rw * rh) < VEHICLE_RECTANGULARITY:
+                continue
+            box = tuple(cv2.boundingRect(c))
+            # The same body can surface in both channels; keep one box per vehicle.
+            if all(_iou(box, seen) < STATIC_IOU for seen in boxes):
+                boxes.append(box)
     return boxes
 
 
