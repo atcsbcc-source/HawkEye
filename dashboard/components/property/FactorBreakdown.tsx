@@ -33,8 +33,8 @@ export function FactorBreakdown({ scan }: { scan: PropertyScan | undefined }) {
 
   return (
     <section className="panel p-4" aria-labelledby="intel-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
           <h2 id="intel-title" className="panel-title flex items-center gap-1.5">
             <BrainCircuit className="h-3.5 w-3.5" aria-hidden /> Intelligence
           </h2>
@@ -48,7 +48,7 @@ export function FactorBreakdown({ scan }: { scan: PropertyScan | undefined }) {
             )}
           </p>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <p className="font-mono text-2xl font-semibold tabular-nums text-white">
             {pct}
             <span className="text-sm text-slate-400">%</span>
@@ -69,7 +69,10 @@ export function FactorBreakdown({ scan }: { scan: PropertyScan | undefined }) {
         aria-label="Vacancy probability"
       >
         <div
-          className={clsx("h-full", pct >= 75 ? "bg-red-500" : pct >= 50 ? "bg-amber-400" : "bg-emerald-500")}
+          className={clsx(
+            "h-full",
+            pct >= 75 ? "bg-red-500" : pct >= 50 ? "bg-amber-400" : "bg-emerald-500",
+          )}
           style={{ width: `${pct}%` }}
         />
       </div>

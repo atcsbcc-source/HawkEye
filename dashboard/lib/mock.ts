@@ -155,8 +155,7 @@ function mockFactorInputs(propertyId: string, w: number) {
   const flagged = lead?.status !== "active";
   // How strongly each parcel's imagery reads as neglected (0..1); m4 is the
   // textbook case, m3 is borderline, m5 is a maintained, occupied home.
-  const intensity =
-    { m1: 0.75, m2: 0.6, m3: 0.45, m4: 0.95, m5: 0, m6: 0.55 }[propertyId] ?? 0.4;
+  const intensity = { m1: 0.75, m2: 0.6, m3: 0.45, m4: 0.95, m5: 0, m6: 0.55 }[propertyId] ?? 0.4;
   const lgi = Number(((lead?.latest_lawn_growth_index ?? 0.3) - w * 0.12).toFixed(2));
   const change = Number((3.1 + w * 0.8).toFixed(1));
   const vehiclePresent = propertyId === "m2" || (propertyId === "m5" && w % 2 === 0);
