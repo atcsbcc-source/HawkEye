@@ -136,7 +136,7 @@ export function ScanTimeline({ scans }: { scans: PropertyScan[] }) {
           />
         ))}
       </div>
-      <p className="text-[10px] text-slate-500">
+      <p className="text-[11px] text-slate-400">
         Hollow points: low alignment frame (score is unreliable). Dashed line: auto-flag threshold /
         zero line.
       </p>
@@ -174,7 +174,7 @@ function Sparkline({
   return (
     <div className="rounded-lg border border-surface-border bg-surface p-3">
       <div className="flex items-baseline justify-between">
-        <p className="text-[10px] uppercase tracking-wide text-slate-500">{series.label}</p>
+        <p className="text-label uppercase text-slate-400">{series.label}</p>
         <p className="text-sm font-semibold tabular-nums text-white">
           {latest == null ? "—" : series.format(latest)}
         </p>
@@ -207,9 +207,12 @@ function Sparkline({
             stroke={series.color}
             strokeWidth={1.5}
           >
+            {/* One string child: React's server renderer drops <title> content
+                when its children are an array, which then fails hydration. */}
             <title>
-              {labels[p[2]] || `Scan ${p[2] + 1}`}: {series.format(series.values[p[2]] as number)}
-              {hollow[p[2]] ? " (low alignment)" : ""}
+              {`${labels[p[2]] || `Scan ${p[2] + 1}`}: ${series.format(
+                series.values[p[2]] as number,
+              )}${hollow[p[2]] ? " (low alignment)" : ""}`}
             </title>
           </circle>
         ))}

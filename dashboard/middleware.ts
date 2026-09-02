@@ -11,11 +11,25 @@ import { NextResponse, type NextRequest } from "next/server";
  * is deliberately not the only guard.
  */
 
-/** Routes a valid pipeline/cron bearer token may call without a cookie session. */
-export const BEARER_ROUTES = ["/api/automation/evaluate", "/api/automation/sweep"] as const;
+/**
+ * Routes a machine bearer token may call without a cookie session, each bound
+ * to exactly one env var: the pipeline token never opens the sweep and the
+ * cron secret never opens the evaluator.
+ */
+export const BEARER_ROUTES: Record<string, "HAWKEYE_PIPELINE_TOKEN" | "CRON_SECRET"> = {
+  "/api/automation/evaluate": "HAWKEYE_PIPELINE_TOKEN",
+  "/api/automation/sweep": "CRON_SECRET",
+};
 
-const BEARER_ENV_VARS = ["HAWKEYE_PIPELINE_TOKEN", "CRON_SECRET"] as const;
-const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+/**
+ * Non-JSON request bodies the UI legitimately sends, per route. Everything
+ * else that is not application/json is rejected (a cross-site <form> can only
+ * produce urlencoded / multipart / text-plain bodies, so the JSON requirement
+ * is the CSRF backstop behind the Origin / Sec-Fetch-Site checks).
+ */
+const NON_JSON_BODIES: Record<string, string[]> = {
+  "/api/properties/import": ["multipart/form-data", "text/csv", "application/geo+json"],
+};
 
 function isDevMode(): boolean {
   return !process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -31,15 +45,15 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-function hasValidBearer(req: NextRequest): boolean {
+function hasValidBearer(req: NextRequest, pathname: string): boolean {
+  const envVar = BEARER_ROUTES[pathname];
+  if (!envVar) return false;
   const header = req.headers.get("authorization") ?? "";
   const m = /^Bearer\s+(.+)$/i.exec(header.trim());
   if (!m) return false;
   const token = m[1].trim();
-  return BEARER_ENV_VARS.some((name) => {
-    const expected = process.env[name];
-    return Boolean(expected && expected.length >= 16 && safeEqual(token, expected));
-  });
+  const expected = process.env[envVar];
+  return Boolean(expected && expected.length >= 16 && safeEqual(token, expected));
 }
 
 function requestHosts(req: NextRequest): string[] {
@@ -54,8 +68,24 @@ function requestHosts(req: NextRequest): string[] {
   return Array.from(hosts);
 }
 
+/**
+ * Content-type backstop for mutating methods. Body-less DELETEs (the archive
+ * button) carry no content-type and cannot be produced by a cross-site form;
+ * the import route additionally accepts the upload types the dialog sends.
+ */
+function contentTypeViolation(req: NextRequest, method: string, pathname: string): string | null {
+  const ct = (req.headers.get("content-type") ?? "").toLowerCase();
+  if (ct.startsWith("application/json")) return null;
+  if (method === "DELETE" && ct === "") return null;
+  const allowed = NON_JSON_BODIES[pathname] ?? [];
+  if (allowed.some((t) => ct.startsWith(t))) return null;
+  return allowed.length > 0
+    ? `content-type must be application/json or ${allowed.join(" / ")}`
+    : "content-type must be application/json";
+}
+
 /** Returns a reason string when a cookie-authenticated mutation looks cross-site. */
-function csrfViolation(req: NextRequest): string | null {
+export function csrfViolation(req: NextRequest): string | null {
   const method = req.method.toUpperCase();
   if (method === "GET" || method === "HEAD" || method === "OPTIONS") return null;
 
@@ -74,11 +104,7 @@ function csrfViolation(req: NextRequest): string | null {
     return "opaque origin";
   }
 
-  if (MUTATING.has(method)) {
-    const ct = (req.headers.get("content-type") ?? "").toLowerCase();
-    if (!ct.startsWith("application/json")) return "content-type must be application/json";
-  }
-  return null;
+  return contentTypeViolation(req, method, req.nextUrl.pathname);
 }
 
 function json(status: number, body: Record<string, unknown>, from?: NextResponse): NextResponse {
@@ -98,7 +124,7 @@ export async function middleware(req: NextRequest) {
   const isApi = pathname.startsWith("/api/");
 
   // Pipeline / cron bearer routes: token auth, no cookies -> no CSRF surface.
-  if (BEARER_ROUTES.some((r) => pathname === r) && hasValidBearer(req)) {
+  if (hasValidBearer(req, pathname)) {
     return NextResponse.next();
   }
 

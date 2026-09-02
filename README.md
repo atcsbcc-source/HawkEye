@@ -183,14 +183,19 @@ amber `DEV MODE · no auth · mock data` badge in the header, and mock data.
   `SITE_URL=<deployed origin> npx tsx dashboard/scripts/invite-user.ts <email> [operator|admin]`.
   The invite e-mail lands on `/auth/confirm`, which verifies the token hash and
   sends the user to `/auth/set-password`.
-- **Roles** live in `app_metadata.role`: `admin` can launch/abort missions and
-  call the manual rule evaluator; `operator` can do everything else.
-  Unauthenticated `/api/*` calls get `401` JSON; pages redirect to
-  `/login?next=`.
-- **CSRF**: cookie-authenticated mutations must send
-  `Content-Type: application/json` from the same origin (`Sec-Fetch-Site` /
-  `Origin` are checked; set `TRUST_PROXY=1` behind Vercel/nginx so the
-  forwarded host is trusted).
+- **Roles** live in `app_metadata.role`: `admin` can launch/abort missions,
+  call the manual rule evaluator, run the distress sweep from the console and
+  delete flights (which cascades to their scans); `operator` can do everything
+  else. Every route handler re-checks the session itself (`withAuth`), so the
+  middleware is never the only guard. Unauthenticated `/api/*` calls get `401`
+  JSON; pages redirect to `/login?next=`.
+- **CSRF**: cookie-authenticated mutations must come from the same origin
+  (`Sec-Fetch-Site` / `Origin` are checked; set `TRUST_PROXY=1` behind
+  Vercel/nginx so the forwarded host is trusted) and carry
+  `Content-Type: application/json` — the two exceptions are a body-less
+  `DELETE` and the `multipart/form-data` / `text/csv` / `application/geo+json`
+  bodies of `POST /api/properties/import`. A cross-site form can produce none
+  of these combinations.
 - **Machine tokens** bypass the cookie gate on two routes only:
   `HAWKEYE_PIPELINE_TOKEN` (>= 32 chars, `openssl rand -hex 32`) for the
   pipeline's `POST /api/automation/evaluate`, and `CRON_SECRET` for
@@ -228,14 +233,19 @@ Redirect URL `<origin>/auth/confirm`; Invite / Reset e-mail templates linking to
   `first_flagged_at` and set `snoozed_until = now + 8 weeks`, during which the
   `auto_flag_property()` trigger will not re-flag it. Dispatch is disabled while
   the verdict is anything but `verified_vacant`.
-- **Distress sweep** — `POST|GET /api/automation/sweep` with
-  `Authorization: Bearer $CRON_SECRET` evaluates enabled `distress_threshold`
-  rules against flagged parcels past `min_days`, once per (rule, parcel) via
-  `automation_rule_firings`; a fired `dispatch_webhook` rule marks the parcel
-  `dispatched`. `dashboard/vercel.json` schedules it daily at 13:00 UTC; plain
-  cron alternative:
+- **Distress sweep** — `POST|GET /api/automation/sweep` evaluates enabled
+  `distress_threshold` rules against flagged parcels past `min_days` (skipping
+  parcels whose verdict is anything but `verified_vacant`), once per
+  (rule, parcel) via `automation_rule_firings`. Only a rule whose action
+  actually succeeded is ledgered, and a parcel is marked `dispatched` only
+  when its `dispatch_webhook` delivery returned 2xx — a CRM outage, timeout or
+  missing webhook URL leaves the lead flagged (`webhook.failed` in the audit
+  stream, `failed` in the sweep summary) so the next sweep retries it.
+  Accepted callers: `Authorization: Bearer $CRON_SECRET` (Vercel Cron sends it
+  automatically; `dashboard/vercel.json` schedules it daily at 13:00 UTC) or an
+  `admin` session — the `Run sweep now` button on `/automation` uses the
+  latter, whether or not `CRON_SECRET` is set. Plain cron alternative:
   `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/automation/sweep`.
-  The `Run sweep now` button on `/automation` calls it same-origin.
 - **Flights** — create the flight row on `/flights` before running the pipeline;
   `/flights/[id]` lists what it processed and prints the exact
   `crop_parcels.py` / `run_pipeline.py` commands.

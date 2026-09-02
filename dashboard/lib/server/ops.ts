@@ -24,5 +24,5 @@ export {
 export { pushEvent, listEvents } from "./audit";
 export type { AuditInput } from "./audit";
 export { listRules, createRule, setRuleEnabled, recordRuleFired, evaluateRules } from "./rules";
-export type { EvaluationResult } from "./rules";
+export type { EvaluationResult, EvaluateOptions, RuleOutcome } from "./rules";
 export { DbError } from "./db";

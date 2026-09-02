@@ -25,7 +25,7 @@ export async function SessionChip() {
       <span className="text-slate-300">
         {user.email}
         {user.role === "admin" && (
-          <span className="ml-2 rounded border border-surface-border px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-400">
+          <span className="ml-2 rounded border border-surface-border px-1.5 py-0.5 text-label uppercase text-slate-400">
             admin
           </span>
         )}

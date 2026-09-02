@@ -198,7 +198,7 @@ export async function fetchFlightScans(
     return mockAllScans()
       .filter((s) => s.flight_id === flightId)
       .map((s) => {
-        const p = mockGetProperty(s.property_id);
+        const p = mockGetProperty(s.property_id, { includeArchived: true });
         return {
           ...s,
           property: p

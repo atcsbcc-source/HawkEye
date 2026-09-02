@@ -7,6 +7,7 @@ import { executeAction, type ActionDeps } from "../automation/actions";
 import { postJson as safePostJson } from "./safe-fetch";
 import { pushEvent } from "./audit";
 import { must } from "./db";
+import { mockFlagProperty } from "./mock-store";
 import { getOpsState } from "./state";
 
 /**
@@ -169,27 +170,58 @@ export async function recordRuleFired(rule: AutomationRule): Promise<void> {
 // ---------------------------------------------------------------------------
 // Rule evaluation — trigger -> condition -> action
 // ---------------------------------------------------------------------------
+export interface RuleOutcome {
+  id: string;
+  name: string;
+  actionType: AutomationRule["actionType"];
+  /** Whether the action succeeded (a webhook 2xx, a flag applied, a notify). */
+  ok: boolean;
+}
+
 export interface EvaluationResult {
   /** Enabled rules bound to this trigger. */
   matched: number;
-  /** Names of the rules whose condition held and whose action ran. */
+  /** Names of the rules whose condition held and whose action succeeded. */
   fired: string[];
+  /** Per-rule result for every rule whose condition held (ok and failed). */
+  outcomes: RuleOutcome[];
+}
+
+export interface EvaluateOptions {
+  /** Restrict evaluation to these rule ids (the sweep passes its pending set). */
+  only?: readonly string[];
 }
 
 export async function evaluateRules(
   trigger: TriggerType,
   payload: Record<string, unknown>,
+  opts: EvaluateOptions = {},
 ): Promise<EvaluationResult> {
-  const { candidates, firing } = selectFiringRules(await listRules(), trigger, payload);
+  let rules = await listRules();
+  if (opts.only) {
+    const allowed = new Set(opts.only);
+    rules = rules.filter((r) => allowed.has(r.id));
+  }
+  const { candidates, firing } = selectFiringRules(rules, trigger, payload);
   // Webhooks go through the SSRF-safe, signed, timeout-bounded poster
   // (assertSafeWebhookUrl runs inside safePostJson before every request).
-  const deps: ActionDeps = { db: getServiceSupabase(), postJson: safePostJson };
+  const deps: ActionDeps = {
+    db: getServiceSupabase(),
+    postJson: safePostJson,
+    flagWithoutDb: mockFlagProperty,
+  };
   const fired: string[] = [];
+  const outcomes: RuleOutcome[] = [];
 
   for (const rule of firing) {
     const result = await executeAction(rule, payload, deps);
-    fired.push(rule.name);
-    await recordRuleFired(rule);
+    outcomes.push({ id: rule.id, name: rule.name, actionType: rule.actionType, ok: result.ok });
+    // A failed action (webhook 5xx, timeout, no URL) is not a firing: leave
+    // fire_count alone so the ledger and counters only reflect real deliveries.
+    if (result.ok) {
+      fired.push(rule.name);
+      await recordRuleFired(rule);
+    }
     await pushEvent({
       actor: `rule:${rule.id}`,
       eventType: "rule.fired",
@@ -210,5 +242,5 @@ export async function evaluateRules(
       });
     }
   }
-  return { matched: candidates.length, fired };
+  return { matched: candidates.length, fired, outcomes };
 }

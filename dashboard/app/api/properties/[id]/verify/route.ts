@@ -1,21 +1,19 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getServiceSupabase } from "@/lib/supabase";
-import { mockRecordVerification } from "@/lib/server/mock-store";
+import { fetchVerifications } from "@/lib/data";
+import { mockRecordVerification, mockScans } from "@/lib/server/mock-store";
 import { pushEvent } from "@/lib/server/ops";
-import { getUser } from "@/lib/server/auth";
-import { VERIFICATION_VERDICTS, type VerificationVerdict } from "@/lib/types";
+import { withAuth } from "@/lib/server/auth";
+import { Verify } from "@/lib/server/schemas";
+import { apiError, parseJson } from "@/lib/server/validate";
+import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 /** Weeks a false positive / occupied verdict suppresses auto re-flagging. */
 const SNOOZE_WEEKS = 8;
 
-const VerifySchema = z.object({
-  verdict: z.enum(VERIFICATION_VERDICTS as [VerificationVerdict, ...VerificationVerdict[]]),
-  note: z.string().trim().max(2000).nullish(),
-  scanId: z.string().trim().min(1).max(80).nullish(),
-});
+type Params = { params: { id: string } };
 
 /**
  * POST /api/properties/[id]/verify { verdict, note?, scanId? }
@@ -25,29 +23,17 @@ const VerifySchema = z.object({
  * first_flagged_at and snooze the auto-flag trigger for 8 weeks so the same
  * lawn does not re-flag next Tuesday. `needs_recheck` leaves status alone.
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-  const parsed = VerifySchema.safeParse(body);
-  if (!parsed.success) {
-    const error = parsed.error.issues
-      .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
-      .join("; ");
-    return NextResponse.json({ error }, { status: 400 });
-  }
-  const { verdict } = parsed.data;
-  const note = parsed.data.note || null;
-  const scanId = parsed.data.scanId || null;
+export const POST = withAuth<Params>(async (req, user, { params }) => {
+  const rl = rateLimit("properties:verify", user.id, 60);
+  if (!rl.ok) return rateLimitResponse(rl);
+
+  const body = await parseJson(req, Verify, { maxBytes: 8_192 });
+  if (!body.ok) return body.res;
+  const { verdict } = body.data;
+  const note = body.data.note || null;
+  const scanId = body.data.scanId || null;
   const demote = verdict === "false_positive" || verdict === "occupied";
   const now = new Date();
-
-  // Middleware already gates this route; resolve the session for attribution.
-  const user = await getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const verifiedBy = user.email || "operator";
 
   const db = getServiceSupabase();
@@ -55,19 +41,39 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   let property: unknown;
 
   if (db) {
-    const { data: existing } = await db
+    const { data: existing, error: lookupErr } = await db
       .from("properties")
       .select("id, status")
       .eq("id", params.id)
+      .is("archived_at", null)
       .maybeSingle();
-    if (!existing) return NextResponse.json({ error: "Property not found" }, { status: 404 });
+    if (lookupErr) {
+      console.error("[verify] lookup failed", lookupErr.code);
+      return apiError("Could not load the property", 500);
+    }
+    if (!existing) return apiError("Property not found", 404);
+
+    // The scan must belong to this parcel; a foreign or fabricated id is a 400,
+    // not a Postgres error surfaced as a 500.
+    if (scanId) {
+      const { data: scan } = await db
+        .from("property_scans")
+        .select("id")
+        .eq("id", scanId)
+        .eq("property_id", params.id)
+        .maybeSingle();
+      if (!scan) return apiError("scanId does not belong to this property", 400);
+    }
 
     const { data: v, error: vErr } = await db
       .from("property_verifications")
       .insert({ property_id: params.id, scan_id: scanId, verdict, note, verified_by: verifiedBy })
       .select()
       .single();
-    if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
+    if (vErr) {
+      console.error("[verify] insert failed", vErr.code);
+      return apiError("Could not record the verdict", 500);
+    }
     verification = v;
 
     const patch: Record<string, unknown> = {
@@ -85,9 +91,15 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       .eq("id", params.id)
       .select()
       .single();
-    if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
+    if (pErr) {
+      console.error("[verify] property update failed", pErr.code);
+      return apiError("Verdict recorded but the property could not be updated", 500);
+    }
     property = p;
   } else {
+    if (scanId && !mockScans(params.id).some((s) => s.id === scanId)) {
+      return apiError("scanId does not belong to this property", 400);
+    }
     const res = mockRecordVerification({
       property_id: params.id,
       verdict,
@@ -95,7 +107,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       scan_id: scanId,
       verified_by: verifiedBy,
     });
-    if (!res) return NextResponse.json({ error: "Property not found" }, { status: 404 });
+    if (!res) return apiError("Property not found", 404);
     verification = res.verification;
     property = res.property;
   }
@@ -109,10 +121,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     detail: { verdict, scan_id: scanId, demoted: demote, note: note ? note.slice(0, 140) : null },
   });
   return NextResponse.json({ verification, property });
-}
+});
 
 /** GET /api/properties/[id]/verify — verification history. */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const { fetchVerifications } = await import("@/lib/data");
+export const GET = withAuth<Params>(async (_req, _user, { params }) => {
   return NextResponse.json({ verifications: await fetchVerifications(params.id) });
-}
+});

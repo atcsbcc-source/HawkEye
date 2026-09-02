@@ -12,6 +12,12 @@ export interface ActionDeps {
   db: SupabaseClient | null;
   /** POST a JSON body; resolves with the HTTP status, rejects on network failure. */
   postJson: (url: string, body: unknown) => Promise<{ status: number }>;
+  /**
+   * Optional store-backed flagger used when `db` is null (mock mode), so the
+   * scan -> auto-flag -> sweep routine works end-to-end without Supabase.
+   * Returns false when the parcel is unknown, dispatched or snoozed.
+   */
+  flagWithoutDb?: (propertyId: string) => boolean;
 }
 
 export interface ActionResult {
@@ -67,15 +73,32 @@ export async function executeAction(
 async function flagProperty(
   rule: AutomationRule,
   payload: Record<string, unknown>,
-  { db }: ActionDeps,
+  { db, flagWithoutDb }: ActionDeps,
 ): Promise<ActionResult> {
   const propertyId = payload.property_id;
-  if (!db || typeof propertyId !== "string" || !propertyId) {
-    return { ok: true, detail: { skipped: !db ? "no database" : "no property_id" } };
+  if (typeof propertyId !== "string" || !propertyId) {
+    return { ok: true, detail: { skipped: "no property_id" } };
+  }
+  const min = num(rule.triggerConfig.min_confidence, AUTO_FLAG_CONFIDENCE);
+  if (!db) {
+    if (!flagWithoutDb) return { ok: true, detail: { skipped: "no database" } };
+    // Mock mode has no scan table to re-read; the payload confidence is the
+    // only signal and the trigger condition already checked it against `min`.
+    const confidence = num(payload.vacancy_confidence, -1);
+    if (confidence < min) {
+      return { ok: true, detail: { skipped: "below threshold", confidence, min } };
+    }
+    if (!flagWithoutDb(propertyId)) {
+      return { ok: true, detail: { skipped: "not flaggable", property_id: propertyId } };
+    }
+    return {
+      ok: true,
+      eventType: "property.flagged",
+      detail: { property_id: propertyId, confidence },
+    };
   }
   // The payload is only a hint: re-read the latest scan so a spoofed or stale
   // confidence can never flag a property the database disagrees with.
-  const min = num(rule.triggerConfig.min_confidence, AUTO_FLAG_CONFIDENCE);
   const { data: scan, error: scanErr } = await db
     .from("property_scans")
     .select("vacancy_confidence")
@@ -107,7 +130,15 @@ async function dispatchWebhook(
   { postJson }: ActionDeps,
 ): Promise<ActionResult> {
   const url = String(rule.actionConfig.url ?? process.env.CRM_WEBHOOK_URL ?? "");
-  if (!url) return { ok: false, detail: { reason: "no webhook url configured" } };
+  if (!url) {
+    // Audited as a failed delivery so the sweep leaves the lead flagged and
+    // the operator can see why nothing reached the CRM.
+    return {
+      ok: false,
+      eventType: "webhook.failed",
+      detail: { error: "no webhook url configured", kind: "unconfigured" },
+    };
+  }
   const started = Date.now();
   try {
     const { status } = await postJson(url, {

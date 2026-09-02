@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { Brand, NavList } from "./Sidebar";
@@ -22,6 +23,7 @@ export function MobileNav() {
   // Escape closes; focus moves into the drawer and back to the trigger.
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -32,7 +34,7 @@ export function MobileNav() {
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
-      triggerRef.current?.focus();
+      trigger?.focus();
     };
   }, [open]);
 
@@ -50,38 +52,46 @@ export function MobileNav() {
         <Menu className="h-5 w-5" aria-hidden />
       </button>
 
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-40 bg-black/60"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-          <div
-            id={DRAWER_ID}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Navigation"
-            className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-surface-border bg-surface-raised shadow-2xl"
-          >
-            <div className="relative">
-              <Brand />
-              <button
-                ref={closeRef}
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close navigation"
-                className="btn-ghost absolute right-2 top-2.5 h-9 w-9 px-0"
-              >
-                <X className="h-5 w-5" aria-hidden />
-              </button>
+      {/*
+        Portaled to <body>: the sticky header's backdrop-blur makes it the
+        containing block for position:fixed descendants, which would trap the
+        overlay and drawer inside the 56px header. `open` is false on the
+        server, so createPortal never runs during SSR.
+      */}
+      {open &&
+        createPortal(
+          <>
+            <div
+              className="fixed inset-0 z-40 bg-black/60 md:hidden"
+              onClick={() => setOpen(false)}
+              aria-hidden
+            />
+            <div
+              id={DRAWER_ID}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Navigation"
+              className="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-surface-border bg-surface-raised shadow-2xl md:hidden"
+            >
+              <div className="relative">
+                <Brand />
+                <button
+                  ref={closeRef}
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Close navigation"
+                  className="btn-ghost absolute right-2 top-2.5 h-9 w-9 px-0"
+                >
+                  <X className="h-5 w-5" aria-hidden />
+                </button>
+              </div>
+              <div className="mt-3">
+                <NavList onNavigate={() => setOpen(false)} />
+              </div>
             </div>
-            <div className="mt-3">
-              <NavList onNavigate={() => setOpen(false)} />
-            </div>
-          </div>
-        </>
-      )}
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

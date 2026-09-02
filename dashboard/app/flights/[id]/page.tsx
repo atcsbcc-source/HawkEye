@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -5,11 +6,20 @@ import { ArrowLeft, Plane } from "lucide-react";
 import { fetchFlight, fetchFlightScans, fetchFlights } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Flight" };
+
+// Shared between generateMetadata and the page within one request.
+const getFlight = cache(fetchFlight);
+
+/** Unknown ids 404 here as well as in the page (no loading boundary above). */
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const flight = await getFlight(params.id);
+  if (!flight) notFound();
+  return { title: flight.flight_code };
+}
 
 export default async function FlightDetailPage({ params }: { params: { id: string } }) {
   const [flight, scans, all] = await Promise.all([
-    fetchFlight(params.id),
+    getFlight(params.id),
     fetchFlightScans(params.id),
     fetchFlights(),
   ]);
@@ -69,8 +79,8 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
         )}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <section className="rounded-xl border border-surface-border bg-surface-raised xl:col-span-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-3">
+        <section className="min-w-0 rounded-xl border border-surface-border bg-surface-raised xl:col-span-2">
           <div className="border-b border-surface-border p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
               Parcels scanned
@@ -153,7 +163,7 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
           </div>
         </section>
 
-        <section className="space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
+        <section className="min-w-0 space-y-3 rounded-xl border border-surface-border bg-surface-raised p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
             Ingest checklist
           </p>
@@ -199,7 +209,7 @@ export default async function FlightDetailPage({ params }: { params: { id: strin
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className="rounded-lg border border-surface-border bg-surface px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-label uppercase text-slate-400">{label}</p>
       <p
         className={
           accent

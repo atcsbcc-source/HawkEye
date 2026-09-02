@@ -7,6 +7,8 @@ import type { AuditEvent } from "@/lib/ops-types";
 interface SweepSummary {
   scanned: number;
   fired: number;
+  /** Actions that ran but failed (webhook error / no URL) — retried next sweep. */
+  failed?: number;
   skipped: number;
   dispatched?: number;
   minDays?: number | null;
@@ -31,6 +33,7 @@ export function SweepBar() {
         setLast({
           scanned: Number(d.scanned ?? 0),
           fired: Number(d.fired ?? 0),
+          failed: d.failed == null ? undefined : Number(d.failed),
           skipped: Number(d.skipped ?? 0),
           dispatched: d.dispatched == null ? undefined : Number(d.dispatched),
           minDays: d.minDays ?? null,
@@ -50,7 +53,12 @@ export function SweepBar() {
     setRunning(true);
     setError(null);
     try {
-      const res = await fetch("/api/automation/sweep", { method: "POST" });
+      // Same-origin, cookie-authenticated: the middleware CSRF rule expects JSON.
+      const res = await fetch("/api/automation/sweep", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(json.error ?? `Sweep failed (${res.status})`);
@@ -59,6 +67,7 @@ export function SweepBar() {
       setLast({
         scanned: json.scanned,
         fired: json.fired,
+        failed: json.failed,
         skipped: json.skipped,
         dispatched: json.dispatched,
         minDays: json.minDays,
@@ -82,8 +91,14 @@ export function SweepBar() {
             <>
               Last sweep {new Date(last.at).toLocaleString()} · scanned{" "}
               <span className="tabular-nums text-slate-100">{last.scanned}</span> · fired{" "}
-              <span className="tabular-nums text-amber-300">{last.fired}</span> · skipped{" "}
-              <span className="tabular-nums text-slate-100">{last.skipped}</span>
+              <span className="tabular-nums text-amber-300">{last.fired}</span>
+              {last.failed ? (
+                <>
+                  {" "}
+                  · failed <span className="tabular-nums text-red-300">{last.failed}</span>
+                </>
+              ) : null}{" "}
+              · skipped <span className="tabular-nums text-slate-100">{last.skipped}</span>
               {last.dispatched !== undefined && (
                 <>
                   {" "}

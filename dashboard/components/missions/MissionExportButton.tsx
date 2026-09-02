@@ -41,7 +41,7 @@ export function MissionExportButton({ missionId }: { missionId: string }) {
             className="block px-3 py-2 text-xs text-slate-200 transition hover:bg-surface"
           >
             <span className="font-medium">KMZ</span>
-            <span className="block text-[10px] text-slate-500">DJI WPML · DJI Fly / Pilot 2</span>
+            <span className="block text-[11px] text-slate-400">DJI WPML · DJI Fly / Pilot 2</span>
           </a>
           <a
             role="menuitem"
@@ -50,7 +50,7 @@ export function MissionExportButton({ missionId }: { missionId: string }) {
             className="block border-t border-surface-border px-3 py-2 text-xs text-slate-200 transition hover:bg-surface"
           >
             <span className="font-medium">KML</span>
-            <span className="block text-[10px] text-slate-500">Polygon + path · Google Earth</span>
+            <span className="block text-[11px] text-slate-400">Polygon + path · Google Earth</span>
           </a>
         </div>
       )}

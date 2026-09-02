@@ -231,20 +231,36 @@ function pickProp(props: Record<string, unknown>, names: string[]): unknown {
   return undefined;
 }
 
-function geometryPoint(geom: any): [number, number] | null {
+/** Loosely-typed GeoJSON shapes: everything is re-validated before use. */
+interface GeoJsonGeometry {
+  type?: unknown;
+  coordinates?: unknown;
+}
+interface GeoJsonFeature {
+  geometry?: unknown;
+  properties?: unknown;
+}
+interface GeoJsonDocument {
+  type?: unknown;
+  features?: unknown;
+}
+
+function geometryPoint(geom: unknown): [number, number] | null {
   if (!geom || typeof geom !== "object") return null;
-  switch (geom.type) {
+  const { type, coordinates } = geom as GeoJsonGeometry;
+  switch (type) {
     case "Point":
-      return Array.isArray(geom.coordinates) && geom.coordinates.length >= 2
-        ? [Number(geom.coordinates[0]), Number(geom.coordinates[1])]
+      return Array.isArray(coordinates) && coordinates.length >= 2
+        ? [Number(coordinates[0]), Number(coordinates[1])]
         : null;
     case "Polygon":
-      return Array.isArray(geom.coordinates?.[0]) ? polygonCentroid(geom.coordinates[0]) : null;
+      return Array.isArray(coordinates) && Array.isArray(coordinates[0])
+        ? polygonCentroid(coordinates[0] as Position[])
+        : null;
     case "MultiPolygon": {
       // Use the largest outer ring by vertex count as the representative parcel.
-      const rings: Position[][] = (geom.coordinates ?? [])
-        .map((poly: Position[][]) => poly?.[0])
-        .filter(Boolean);
+      const polys = Array.isArray(coordinates) ? (coordinates as Position[][][]) : [];
+      const rings: Position[][] = polys.map((poly) => poly?.[0]).filter(Boolean);
       if (rings.length === 0) return null;
       rings.sort((a, b) => b.length - a.length);
       return polygonCentroid(rings[0]);
@@ -255,7 +271,7 @@ function geometryPoint(geom: any): [number, number] | null {
 }
 
 export function parseGeoJson(input: unknown): ParseResult {
-  let doc: any = input;
+  let doc: unknown = input;
   if (typeof input === "string") {
     try {
       doc = JSON.parse(input);
@@ -263,7 +279,8 @@ export function parseGeoJson(input: unknown): ParseResult {
       return { rows: [], invalid: [], error: "GeoJSON is not valid JSON" };
     }
   }
-  if (!doc || doc.type !== "FeatureCollection" || !Array.isArray(doc.features)) {
+  const collection = (doc ?? {}) as GeoJsonDocument;
+  if (!doc || collection.type !== "FeatureCollection" || !Array.isArray(collection.features)) {
     return {
       rows: [],
       invalid: [],
@@ -272,11 +289,12 @@ export function parseGeoJson(input: unknown): ParseResult {
   }
   const rows: ParsedParcel[] = [];
   const invalid: InvalidRow[] = [];
-  doc.features.forEach((feature: any, idx: number) => {
+  (collection.features as unknown[]).forEach((item, idx) => {
     const row = idx + 1;
+    const feature = (item ?? undefined) as GeoJsonFeature | undefined;
     const props: Record<string, unknown> =
       feature && typeof feature.properties === "object" && feature.properties
-        ? feature.properties
+        ? (feature.properties as Record<string, unknown>)
         : {};
     const pt = geometryPoint(feature?.geometry);
     if (!pt) {

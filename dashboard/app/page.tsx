@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AlertTriangle, Building2, Plane, Send, Timer } from "lucide-react";
 import { fetchLeads } from "@/lib/data";
 import { DISTRESS_THRESHOLD_DAYS } from "@/lib/types";
@@ -5,12 +6,26 @@ import { fmtDateTime, fmtRelative } from "@/lib/format";
 import { PropertyGrid } from "@/components/PropertyGrid";
 import { StatCard } from "@/components/StatCard";
 import { LeadActions } from "@/components/leads/LeadActions";
+import { CommandCenterSkeleton } from "@/components/ui/PageSkeletons";
 
 export const dynamic = "force-dynamic";
 // Title falls back to the layout default ("HawkEye Command Center"): Next only
 // applies `title.template` to child segments, not the root page itself.
 
-export default async function CommandCenter() {
+/**
+ * The skeleton is an in-page Suspense fallback rather than app/loading.tsx: a
+ * root loading.tsx would wrap every route and stream a 200 shell before
+ * dynamic pages can answer 404 (see components/ui/PageSkeletons.tsx).
+ */
+export default function CommandCenter() {
+  return (
+    <Suspense fallback={<CommandCenterSkeleton />}>
+      <CommandCenterBody />
+    </Suspense>
+  );
+}
+
+async function CommandCenterBody() {
   const leads = await fetchLeads();
   const source = process.env.NEXT_PUBLIC_SUPABASE_URL ? "supabase" : "mock";
 

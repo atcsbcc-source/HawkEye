@@ -70,11 +70,15 @@ export function authErrorResponse(err: AuthError): NextResponse {
   return NextResponse.json({ error: err.message }, { status: err.status });
 }
 
-type Handler = (req: NextRequest, user: AuthUser) => Promise<Response> | Response;
+type Handler<C> = (req: NextRequest, user: AuthUser, ctx: C) => Promise<Response> | Response;
 
-/** Wrap a route handler: 401/403 JSON unless a user (with `role`) is present. */
-export function withAuth(handler: Handler, opts: { role?: Role } = {}) {
-  return async (req: NextRequest): Promise<Response> => {
+/**
+ * Wrap a route handler: 401/403 JSON unless a user (with `role`) is present.
+ * The route's second argument (`{ params }` on dynamic segments) is forwarded
+ * untouched as the handler's third parameter.
+ */
+export function withAuth<C = unknown>(handler: Handler<C>, opts: { role?: Role } = {}) {
+  return async (req: NextRequest, ctx: C): Promise<Response> => {
     let user: AuthUser;
     try {
       user = await requireUser(opts);
@@ -82,7 +86,7 @@ export function withAuth(handler: Handler, opts: { role?: Role } = {}) {
       if (err instanceof AuthError) return authErrorResponse(err);
       throw err;
     }
-    return handler(req, user);
+    return handler(req, user, ctx);
   };
 }
 

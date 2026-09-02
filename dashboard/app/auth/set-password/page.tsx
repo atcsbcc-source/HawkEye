@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SetPasswordForm } from "@/components/auth/SetPasswordForm";
 import { getUser, isDevMode } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Set password" };
 
 /** Reached from /auth/confirm after an invite or recovery link. */
 export default async function SetPasswordPage() {

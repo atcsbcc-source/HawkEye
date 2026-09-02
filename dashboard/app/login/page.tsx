@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Crosshair } from "lucide-react";
@@ -5,6 +6,7 @@ import { LoginForm } from "@/components/auth/LoginForm";
 import { getUser, isDevMode } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { title: "Sign in" };
 
 export default async function LoginPage({
   searchParams,

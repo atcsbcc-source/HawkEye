@@ -8,6 +8,10 @@ import {
 } from "@/lib/import/parse";
 import { mockFindByParcel, mockUpsertProperty } from "@/lib/server/mock-store";
 import { pushEvent } from "@/lib/server/ops";
+import { withAuth } from "@/lib/server/auth";
+import { must } from "@/lib/server/db";
+import { apiError } from "@/lib/server/validate";
+import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -22,14 +26,15 @@ const BATCH = 500;
  * batches of 500. `dryRun=1` only reports what would happen:
  *   { new, updated, invalid: [{row, reason}], total }
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async (req, user) => {
+  const rl = rateLimit("properties:import", user.id, 10);
+  if (!rl.ok) return rateLimitResponse(rl);
+
   const url = new URL(req.url);
   const dryRun = ["1", "true"].includes(url.searchParams.get("dryRun") ?? "");
 
   const declared = Number(req.headers.get("content-length") ?? 0);
-  if (declared > MAX_BYTES) {
-    return NextResponse.json({ error: "File exceeds the 5 MB import limit" }, { status: 413 });
-  }
+  if (declared > MAX_BYTES) return apiError("File exceeds the 5 MB import limit", 413);
 
   let text: string;
   let filename: string | undefined;
@@ -39,39 +44,38 @@ export async function POST(req: Request) {
       const form = await req.formData();
       const file = form.get("file");
       if (!(file instanceof Blob)) {
-        return NextResponse.json(
-          { error: "multipart body must include a `file` field" },
-          { status: 400 },
-        );
+        return apiError("multipart body must include a `file` field", 400);
       }
-      if (file.size > MAX_BYTES) {
-        return NextResponse.json({ error: "File exceeds the 5 MB import limit" }, { status: 413 });
-      }
+      if (file.size > MAX_BYTES) return apiError("File exceeds the 5 MB import limit", 413);
       filename = (file as File).name;
       text = await file.text();
     } else {
       text = await req.text();
-      if (text.length > MAX_BYTES) {
-        return NextResponse.json({ error: "File exceeds the 5 MB import limit" }, { status: 413 });
-      }
+      if (text.length > MAX_BYTES) return apiError("File exceeds the 5 MB import limit", 413);
     }
   } catch {
-    return NextResponse.json({ error: "Could not read upload" }, { status: 400 });
+    return apiError("Could not read upload", 400);
   }
-  if (!text.trim()) return NextResponse.json({ error: "Empty upload" }, { status: 400 });
+  if (!text.trim()) return apiError("Empty upload", 400);
 
   const parsed = parseParcels(
     text,
     filename,
     contentType.includes("multipart") ? undefined : contentType,
   );
-  if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
+  if (parsed.error) return apiError(parsed.error, 400);
 
   const { rows, duplicates } = dedupeParcels(parsed.rows);
   const invalid: InvalidRow[] = [...parsed.invalid, ...duplicates].sort((a, b) => a.row - b.row);
 
   const db = getServiceSupabase();
-  const existing = await existingParcelIds(rows, db);
+  let existing: Set<string>;
+  try {
+    existing = await existingParcelIds(rows, db);
+  } catch (err) {
+    console.error("[import] lookup failed", err);
+    return apiError("Could not check existing parcels", 500);
+  }
   const newRows = rows.filter((r) => !existing.has(r.parcel_id));
   const updatedRows = rows.filter((r) => existing.has(r.parcel_id));
 
@@ -93,13 +97,15 @@ export async function POST(req: Request) {
         lat: r.lat,
         lng: r.lng,
         neighborhood: r.neighborhood,
+        // Blank cells keep the existing note (mock-store mirrors this).
         ...(r.notes ? { notes: r.notes } : {}),
         archived_at: null,
       }));
       const { error } = await db.from("properties").upsert(batch, { onConflict: "parcel_id" });
       if (error) {
+        console.error("[import] batch failed", i / BATCH + 1, error.code);
         return NextResponse.json(
-          { error: `Batch ${i / BATCH + 1} failed: ${error.message}`, imported: i },
+          { error: `Batch ${i / BATCH + 1} failed; ${i} rows were imported`, imported: i },
           { status: 500 },
         );
       }
@@ -109,7 +115,8 @@ export async function POST(req: Request) {
   }
 
   pushEvent({
-    actor: "operator",
+    actor: user.email,
+    actorUserId: user.id,
     eventType: "property.imported",
     subjectType: "property",
     subjectId: null,
@@ -121,8 +128,9 @@ export async function POST(req: Request) {
     },
   });
   return NextResponse.json(summary);
-}
+});
 
+/** Throws DbError when a lookup fails so a dry run never reports every row as new. */
 async function existingParcelIds(
   rows: ParsedParcel[],
   db: ReturnType<typeof getServiceSupabase>,
@@ -134,10 +142,13 @@ async function existingParcelIds(
     return found;
   }
   for (let i = 0; i < ids.length; i += BATCH) {
-    const { data } = await db
-      .from("properties")
-      .select("parcel_id")
-      .in("parcel_id", ids.slice(i, i + BATCH));
+    const data = await must(
+      db
+        .from("properties")
+        .select("parcel_id")
+        .in("parcel_id", ids.slice(i, i + BATCH)),
+      "select properties.parcel_id",
+    );
     for (const r of data ?? []) found.add(r.parcel_id);
   }
   return found;

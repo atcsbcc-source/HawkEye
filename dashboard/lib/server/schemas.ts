@@ -23,7 +23,7 @@ export const PropertyId = z
   .max(64)
   .refine((v) => isDevMode() || UUID_RE.test(v), { message: "must be a uuid" });
 
-const ScanId = z
+export const ScanId = z
   .string()
   .min(1)
   .max(64)
@@ -175,6 +175,70 @@ export type DispatchInput = z.infer<typeof Dispatch>;
 export const AuditQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Properties / flights / verification (features routes)
+// ---------------------------------------------------------------------------
+const Lat = z.coerce.number().refine(Number.isFinite, "lat must be a number").min(-90).max(90);
+const Lng = z.coerce.number().refine(Number.isFinite, "lng must be a number").min(-180).max(180);
+const IsoDate = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((s) => !Number.isNaN(new Date(s).getTime()), "flown_at must be a date");
+
+export const PropertyCreate = z.strictObject({
+  parcel_id: z.string().trim().min(1).max(64),
+  address: z.string().trim().min(1).max(200),
+  lat: Lat,
+  lng: Lng,
+  neighborhood: z.string().trim().max(80).nullish(),
+  notes: z.string().trim().max(2000).nullish(),
+});
+export type PropertyCreateInput = z.infer<typeof PropertyCreate>;
+
+export const PropertyPatch = z.strictObject({
+  address: z.string().trim().min(1).max(200).optional(),
+  lat: Lat.optional(),
+  lng: Lng.optional(),
+  neighborhood: z.string().trim().max(80).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+export type PropertyPatchInput = z.infer<typeof PropertyPatch>;
+
+export const Verify = z.strictObject({
+  verdict: z.enum(["verified_vacant", "false_positive", "occupied", "needs_recheck"]),
+  note: z.string().trim().max(2000).nullish(),
+  scanId: ScanId.nullish(),
+});
+export type VerifyInput = z.infer<typeof Verify>;
+
+export const FlightCreate = z.strictObject({
+  flight_code: z
+    .string()
+    .trim()
+    .min(3)
+    .max(64)
+    .regex(/^[A-Za-z0-9._-]+$/, "letters, digits, . _ - only")
+    .optional(),
+  flown_at: IsoDate,
+  neighborhood: z.string().trim().min(1).max(80),
+  drone_model: z.string().trim().min(1).max(80).optional(),
+  altitude_m: z.coerce.number().min(5).max(500).nullish(),
+  gsd_cm_per_px: z.coerce.number().min(0.1).max(100).nullish(),
+  notes: z.string().trim().max(2000).nullish(),
+});
+export type FlightCreateInput = z.infer<typeof FlightCreate>;
+
+export const FlightPatch = z.strictObject({
+  flown_at: IsoDate.optional(),
+  neighborhood: z.string().trim().min(1).max(80).optional(),
+  drone_model: z.string().trim().min(1).max(80).optional(),
+  altitude_m: z.coerce.number().min(5).max(500).nullable().optional(),
+  gsd_cm_per_px: z.coerce.number().min(0.1).max(100).nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+export type FlightPatchInput = z.infer<typeof FlightPatch>;
 
 export const LoginBody = z.strictObject({
   email: z.string().trim().email().max(254),

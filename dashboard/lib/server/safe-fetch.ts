@@ -188,12 +188,24 @@ export function assertSafeWebhookUrlSync(raw: string): URL {
   return url;
 }
 
-/** Sync checks plus a DNS resolution range check on every resolved address. */
-export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
+export interface ResolvedAddress {
+  address: string;
+  family: 4 | 6;
+}
+
+/**
+ * Sync checks plus a DNS resolution range check on every resolved address.
+ * Returns the vetted addresses too so the caller can PIN the connection to
+ * them — resolving again at connect time would reopen a DNS-rebinding window.
+ */
+export async function resolveSafeWebhookUrl(
+  raw: string,
+): Promise<{ url: URL; addresses: ResolvedAddress[] }> {
   const url = assertSafeWebhookUrlSync(raw);
   const hostname = url.hostname.replace(/^\[|\]$/g, "");
-  if (ipFamily(hostname)) return url; // literal already range-checked
-  let addresses: { address: string }[];
+  const literal = ipFamily(hostname);
+  if (literal) return { url, addresses: [{ address: hostname, family: literal }] };
+  let addresses: { address: string; family: number }[];
   try {
     const dns = await import(/* webpackIgnore: true */ "node:dns/promises");
     addresses = await dns.lookup(hostname, { all: true });
@@ -211,7 +223,15 @@ export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
       );
     }
   }
-  return url;
+  return {
+    url,
+    addresses: addresses.map((a) => ({ address: a.address, family: a.family === 6 ? 6 : 4 })),
+  };
+}
+
+/** Sync checks plus a DNS resolution range check on every resolved address. */
+export async function assertSafeWebhookUrl(raw: string): Promise<URL> {
+  return (await resolveSafeWebhookUrl(raw)).url;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,11 +260,39 @@ export interface SafePostResult {
 }
 
 /**
+ * Node `lookup` hook that answers only from the vetted address list, so the
+ * TLS connection goes to an address that passed isBlockedAddress() while SNI
+ * and certificate validation still use the original hostname.
+ */
+type LookupCallback = (
+  err: NodeJS.ErrnoException | null,
+  address: string | { address: string; family: number }[],
+  family?: number,
+) => void;
+
+function pinnedLookup(addresses: ResolvedAddress[]) {
+  return (_hostname: string, options: unknown, callback: LookupCallback) => {
+    const wantAll =
+      typeof options === "object" && options !== null && (options as { all?: boolean }).all;
+    if (wantAll) {
+      callback(
+        null,
+        addresses.map((a) => ({ address: a.address, family: a.family })),
+      );
+    } else {
+      callback(null, addresses[0].address, addresses[0].family);
+    }
+  };
+}
+
+/**
  * POST JSON to a validated webhook URL. Never follows redirects, aborts after
  * `timeoutMs`, and signs the body with WEBHOOK_SIGNING_SECRET when set:
  *   x-hawkeye-timestamp: <unix ms>
  *   x-hawkeye-signature: hex(HMAC-SHA256(secret, `${ts}.${body}`))
- * Resolves with `{status, ms}` (any status); throws WebhookError otherwise.
+ * The connection is pinned to the addresses the SSRF check vetted (no second
+ * DNS resolution at connect time). Resolves with `{status, ms}` (any status);
+ * throws WebhookError otherwise.
  */
 export async function safePostJson(
   url: string,
@@ -252,37 +300,54 @@ export async function safePostJson(
   opts: { timeoutMs?: number; skipDns?: boolean } = {},
 ): Promise<SafePostResult> {
   const timeoutMs = opts.timeoutMs ?? 8000;
-  const target = opts.skipDns ? assertSafeWebhookUrlSync(url) : await assertSafeWebhookUrl(url);
+  const { url: target, addresses } = opts.skipDns
+    ? { url: assertSafeWebhookUrlSync(url), addresses: [] as ResolvedAddress[] }
+    : await resolveSafeWebhookUrl(url);
   const payload = JSON.stringify(body);
   const ts = String(Date.now());
   const headers: Record<string, string> = {
     "content-type": "application/json",
+    "content-length": String(new TextEncoder().encode(payload).byteLength),
     "user-agent": "hawkeye-webhook/1.0",
     "x-hawkeye-timestamp": ts,
   };
   const secret = process.env.WEBHOOK_SIGNING_SECRET;
   if (secret) headers["x-hawkeye-signature"] = await signPayload(secret, ts, payload);
 
+  const https = await import(/* webpackIgnore: true */ "node:https");
+  const hostname = target.hostname.replace(/^\[|\]$/g, "");
   const started = Date.now();
-  try {
-    const res = await fetch(target.toString(), {
-      method: "POST",
-      headers,
-      body: payload,
-      redirect: "error",
-      signal: AbortSignal.timeout(timeoutMs),
+  return new Promise<SafePostResult>((resolve, reject) => {
+    const req = https.request(
+      {
+        protocol: "https:",
+        hostname,
+        port: 443,
+        path: `${target.pathname}${target.search}`,
+        method: "POST",
+        headers,
+        servername: ipFamily(hostname) ? undefined : hostname,
+        ...(addresses.length > 0 ? { lookup: pinnedLookup(addresses) } : {}),
+      },
+      (res) => {
+        // https.request never follows redirects; report the status as-is.
+        // Drain so the socket is released; we never read webhook bodies.
+        res.resume();
+        resolve({ status: res.statusCode ?? 0, ms: Date.now() - started });
+      },
+    );
+    const timer = setTimeout(() => {
+      req.destroy(new WebhookError("timeout", `webhook timed out after ${timeoutMs} ms`));
+    }, timeoutMs);
+    req.on("error", (err) => {
+      clearTimeout(timer);
+      reject(
+        err instanceof WebhookError ? err : new WebhookError("network", "webhook request failed"),
+      );
     });
-    // Drain (bounded) so the socket is released; we never read webhook bodies.
-    void res.body?.cancel().catch(() => undefined);
-    return { status: res.status, ms: Date.now() - started };
-  } catch (err) {
-    if (err instanceof WebhookError) throw err;
-    const name = (err as { name?: string })?.name;
-    if (name === "TimeoutError" || name === "AbortError") {
-      throw new WebhookError("timeout", `webhook timed out after ${timeoutMs} ms`);
-    }
-    throw new WebhookError("network", "webhook request failed");
-  }
+    req.on("response", () => clearTimeout(timer));
+    req.end(payload);
+  });
 }
 
 /** Stable injectable signature for lib/automation ActionDeps.postJson. */

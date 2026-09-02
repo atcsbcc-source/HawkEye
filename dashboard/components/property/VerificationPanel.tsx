@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { CheckCircle2, CircleSlash, Home, Loader2, RotateCcw } from "lucide-react";
-import type { PropertyLead, PropertyVerification, VerificationVerdict } from "@/lib/types";
+import {
+  VERDICT_LABEL,
+  type PropertyLead,
+  type PropertyVerification,
+  type VerificationVerdict,
+} from "@/lib/types";
 
 const VERDICTS: {
   value: VerificationVerdict;
@@ -47,13 +52,6 @@ const VERDICTS: {
     demotes: false,
   },
 ];
-
-export const VERDICT_LABEL: Record<VerificationVerdict, string> = {
-  verified_vacant: "Verified vacant",
-  false_positive: "False positive",
-  occupied: "Occupied",
-  needs_recheck: "Needs recheck",
-};
 
 /**
  * Operator verdict card: four verdict buttons (confirm before demoting),
@@ -163,7 +161,7 @@ export function VerificationPanel({
             <>
               Current verdict: <span className="text-slate-100">{VERDICT_LABEL[current]}</span>
               {verifiedAt && (
-                <span className="text-slate-500"> · {new Date(verifiedAt).toLocaleString()}</span>
+                <span className="text-slate-400"> · {new Date(verifiedAt).toLocaleString()}</span>
               )}
             </>
           ) : (
@@ -219,7 +217,7 @@ export function VerificationPanel({
           <span className="text-[11px] uppercase tracking-[0.2em] text-slate-400">
             Property notes
           </span>
-          <span className="text-[10px] text-slate-500">
+          <span className="text-[11px] text-slate-400">
             {notesState === "saving" && "Saving…"}
             {notesState === "saved" && "Saved"}
             {notesState === "error" && <span className="text-red-400">Save failed</span>}
@@ -246,7 +244,7 @@ export function VerificationPanel({
           )}
           {history?.map((h) => (
             <li key={h.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs">
-              <span className="font-mono text-[10px] text-slate-500">
+              <span className="font-mono text-[11px] text-slate-400">
                 {new Date(h.created_at).toLocaleString()}
               </span>
               <span className="text-slate-100">{VERDICT_LABEL[h.verdict]}</span>

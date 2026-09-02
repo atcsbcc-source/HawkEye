@@ -87,7 +87,9 @@ export function MissionQueue({
                 className="rounded-lg border border-surface-border bg-surface px-3 py-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
+                  {/* flex-1 basis-0: the truncated name yields to the actions so
+                      the row can never exceed the panel width on mobile. */}
+                  <div className="min-w-0 flex-1 basis-0">
                     <p className="truncate text-sm text-white">{m.name}</p>
                     <p
                       className="font-mono text-[11px] text-slate-400"
@@ -95,7 +97,10 @@ export function MissionQueue({
                       suppressHydrationWarning
                     >
                       {m.id.slice(0, 8)} ·{" "}
-                      {now === null ? fmtDate(m.createdAt) : fmtRelative(m.createdAt, now)}
+                      {now === null
+                        ? fmtDate(m.createdAt)
+                        : // A mission created after the last 30 s tick must never read "in 3s".
+                          fmtRelative(m.createdAt, Math.max(now, Date.parse(m.createdAt) || now))}
                       {m.droneSerial ? ` · ${m.droneSerial}` : ""}
                     </p>
                   </div>

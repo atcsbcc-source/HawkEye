@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { FileUp, Loader2, X } from "lucide-react";
@@ -20,13 +20,18 @@ interface Preview {
   }[];
 }
 
+const TITLE_ID = "import-parcels-title";
+
 /**
  * CSV / GeoJSON parcel import. Step 1 uploads with ?dryRun=1 and renders the
- * preview + error rows; step 2 commits the same file.
+ * preview + error rows; step 2 commits the same file. The grid is refreshed
+ * when the dialog closes after a commit — refreshing immediately would remount
+ * the page and unmount this dialog before the summary is shown.
  */
 export function ImportDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [state, setState] = useState<"idle" | "previewing" | "importing" | "done" | "error">(
@@ -34,6 +39,28 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   );
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Preview | null>(null);
+  const committed = result !== null;
+
+  function close() {
+    onClose();
+    if (committed) router.refresh();
+  }
+
+  // Focus moves into the dialog on open and back to the trigger on close;
+  // Escape closes (see MobileNav for the same pattern).
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
+    (fileRef.current ?? closeRef.current)?.focus();
+    return () => trigger?.focus?.();
+  }, []);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [committed, onClose]);
 
   async function send(dryRun: boolean) {
     if (!file) return;
@@ -58,7 +85,6 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
       } else {
         setResult(json);
         setState("done");
-        router.refresh();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
@@ -71,16 +97,25 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-      role="dialog"
-      aria-modal="true"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
     >
-      <div className="w-full max-w-2xl space-y-4 rounded-xl border border-surface-border bg-surface-raised p-5">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={TITLE_ID}
+        className="w-full max-w-2xl space-y-4 rounded-xl border border-surface-border bg-surface-raised p-5"
+      >
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+            <p
+              id={TITLE_ID}
+              className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400"
+            >
               Import parcels
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-slate-400">
               CSV with{" "}
               <code className="text-slate-300">parcel_id,address,lat,lng[,neighborhood]</code> or a
               GeoJSON FeatureCollection (Point or Polygon features). Existing parcel IDs are
@@ -88,7 +123,9 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             </p>
           </div>
           <button
-            onClick={onClose}
+            ref={closeRef}
+            type="button"
+            onClick={close}
             className="rounded-md p-1 text-slate-400 hover:text-white"
             aria-label="Close"
           >
@@ -111,6 +148,7 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
             className="text-xs text-slate-300 file:mr-3 file:rounded-md file:border file:border-surface-border file:bg-surface file:px-3 file:py-1.5 file:text-xs file:text-slate-200"
           />
           <button
+            type="button"
             onClick={() => send(true)}
             disabled={!file || busy}
             className="flex items-center gap-2 rounded-lg border border-sky-500/50 bg-sky-500/10 px-3 py-1.5 text-xs text-sky-300 transition hover:bg-sky-500/20 disabled:opacity-50"
@@ -126,14 +164,19 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
 
         {error && <p className="text-xs text-red-400">{error}</p>}
 
-        {(preview || result) && <Summary data={(result ?? preview)!} committed={Boolean(result)} />}
+        {(preview || result) && <Summary data={(result ?? preview)!} committed={committed} />}
 
         {preview && !result && (
           <div className="flex items-center justify-end gap-3">
-            <button onClick={onClose} className="text-xs text-slate-400 hover:text-white">
+            <button
+              type="button"
+              onClick={close}
+              className="text-xs text-slate-400 hover:text-white"
+            >
               Cancel
             </button>
             <button
+              type="button"
               onClick={() => send(false)}
               disabled={busy || preview.new + preview.updated === 0}
               className="flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
@@ -146,7 +189,8 @@ export function ImportDialog({ onClose }: { onClose: () => void }) {
         {result && (
           <div className="flex justify-end">
             <button
-              onClick={onClose}
+              type="button"
+              onClick={close}
               className="rounded-lg bg-emerald-600/20 px-4 py-2 text-sm text-emerald-300"
             >
               Done
@@ -174,7 +218,7 @@ function Summary({ data, committed }: { data: Preview; committed: boolean }) {
       {data.preview && data.preview.length > 0 && !committed && (
         <div className="max-h-48 overflow-auto rounded-lg border border-surface-border">
           <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-surface text-[10px] uppercase tracking-wide text-slate-500">
+            <thead className="sticky top-0 bg-surface text-label uppercase text-slate-400">
               <tr>
                 <th className="px-3 py-2">Row</th>
                 <th className="px-3 py-2">Parcel</th>
@@ -186,7 +230,7 @@ function Summary({ data, committed }: { data: Preview; committed: boolean }) {
             <tbody>
               {data.preview.map((r) => (
                 <tr key={r.row} className="border-t border-surface-border/60 text-slate-300">
-                  <td className="px-3 py-1.5 font-mono text-slate-500">{r.row}</td>
+                  <td className="px-3 py-1.5 font-mono text-slate-400">{r.row}</td>
                   <td className="px-3 py-1.5 font-mono">{r.parcel_id}</td>
                   <td className="px-3 py-1.5">{r.address}</td>
                   <td className="px-3 py-1.5 font-mono tabular-nums">
@@ -229,7 +273,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg border border-surface-border bg-surface p-3">
-      <p className="text-[10px] uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-label uppercase text-slate-400">{label}</p>
       <p
         className={clsx(
           "mt-1 text-xl font-semibold tabular-nums",

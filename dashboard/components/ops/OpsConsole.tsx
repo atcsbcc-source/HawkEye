@@ -177,9 +177,11 @@ export function OpsConsole({ leads }: { leads: PropertyLead[] }) {
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+    // minmax(0,1fr) on every breakpoint: with an implicit `auto` column the
+    // mission rows' min-content width would widen the map and pan the page.
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
       {/* `isolate` keeps Leaflet's z-index:1000 controls under the sticky header. */}
-      <div className="isolate h-[60vh] min-h-[20rem] overflow-hidden rounded-xl border border-surface-border lg:h-[calc(100vh-7.5rem)]">
+      <div className="isolate h-[60vh] min-h-[20rem] min-w-0 overflow-hidden rounded-xl border border-surface-border lg:h-[calc(100vh-7.5rem)]">
         <OpsMap
           leads={leads}
           telemetry={telemetry}
@@ -188,7 +190,7 @@ export function OpsConsole({ leads }: { leads: PropertyLead[] }) {
           focusId={focusId}
         />
       </div>
-      <div className="space-y-4 lg:h-[calc(100vh-7.5rem)] lg:overflow-y-auto lg:pr-1">
+      <div className="min-w-0 space-y-4 lg:h-[calc(100vh-7.5rem)] lg:overflow-y-auto lg:pr-1">
         <TelemetryRail
           telemetry={telemetry}
           link={link}

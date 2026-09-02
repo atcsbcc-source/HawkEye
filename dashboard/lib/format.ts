@@ -82,6 +82,7 @@ export function fmtRelative(d: DateInput, now: number = Date.now()): string {
   const diffS = Math.round((t - now) / 1000);
   const abs = Math.abs(diffS);
   const f = relFmt();
+  if (diffS === 0) return "now";
   if (abs < 60) return f.format(diffS, "second");
   if (abs < 3600) return f.format(Math.round(diffS / 60), "minute");
   if (abs < 86_400) return f.format(Math.round(diffS / 3600), "hour");

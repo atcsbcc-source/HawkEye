@@ -109,7 +109,10 @@ export function PropertyForm({
     setState("archiving");
     setError(null);
     try {
-      const res = await fetch(`/api/properties/${initial.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/properties/${initial.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+      });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(json.error ?? `Request failed (${res.status})`);

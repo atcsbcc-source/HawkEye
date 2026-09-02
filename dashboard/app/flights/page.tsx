@@ -29,11 +29,18 @@ export default async function FlightsPage() {
         </p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="xl:col-span-2">
+      {/* minmax(0,1fr) + min-w-0: the 9-column table must scroll inside its
+          overflow-x-auto wrapper instead of widening the page on mobile. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-3">
+        <div className="min-w-0 xl:col-span-2">
           <FlightTable flights={flights} />
         </div>
-        <FlightForm neighborhoods={neighborhoods} defaultNeighborhood={flights[0]?.neighborhood} />
+        <div className="min-w-0">
+          <FlightForm
+            neighborhoods={neighborhoods}
+            defaultNeighborhood={flights[0]?.neighborhood}
+          />
+        </div>
       </div>
     </div>
   );

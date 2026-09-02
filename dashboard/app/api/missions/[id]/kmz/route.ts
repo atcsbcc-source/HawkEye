@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import { listMissions } from "@/lib/server/ops";
+import { withAuth } from "@/lib/server/auth";
 import { planGrid } from "@/lib/drone/grid";
 import { buildKmz, safeFileName } from "@/lib/drone/wpml";
 
 export const dynamic = "force-dynamic";
 
+type Params = { params: { id: string } };
+
 /**
  * GET /api/missions/[id]/kmz[?altitude=90&front=0.75&side=0.65]
  * DJI WPML package for DJI Fly / DJI Pilot 2 (wpmz/template.kml + wpmz/waylines.wpml).
  */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export const GET = withAuth<Params>(async (req, _user, { params }) => {
   const mission = listMissions().find((m) => m.id === params.id);
   if (!mission) return NextResponse.json({ error: "Mission not found" }, { status: 404 });
 
@@ -32,10 +35,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
       },
     });
   } catch (err) {
-    const status = err instanceof RangeError ? 422 : 500;
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Export failed" },
-      { status },
-    );
+    if (err instanceof RangeError)
+      return NextResponse.json({ error: err.message }, { status: 422 });
+    console.error("[missions] kmz export failed", err);
+    return NextResponse.json({ error: "Export failed" }, { status: 500 });
   }
-}
+});

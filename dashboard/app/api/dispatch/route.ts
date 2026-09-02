@@ -6,15 +6,27 @@ import { Dispatch } from "@/lib/server/schemas";
 import { apiError, parseJson } from "@/lib/server/validate";
 import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { safePostJson, WebhookError } from "@/lib/server/safe-fetch";
+import { mockGetProperty, mockScans, mockUpdateProperty } from "@/lib/server/mock-store";
+import type { LeadStatus, VerificationVerdict } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+interface LeadRow {
+  id: string;
+  parcel_id: string;
+  address: string;
+  status: LeadStatus;
+  first_flagged_at: string | null;
+  verification: VerificationVerdict | null;
+}
 
 /**
  * POST /api/dispatch  { propertyId, scanId? }
  *
  * Fired after an operator manually verifies the imagery. Forwards the lead to
  * the configured CRM webhook (signed, timeout-bounded), then marks the
- * property `dispatched`.
+ * property `dispatched`. The verdict gate the UI shows is enforced here too:
+ * a lead whose verdict is anything but `verified_vacant` is never dispatched.
  */
 export const POST = withAuth(async (req, user) => {
   const rl = rateLimit("dispatch", user.id, 10);
@@ -34,15 +46,16 @@ export const POST = withAuth(async (req, user) => {
 
   // Pull authoritative lead details server-side; never trust client payloads
   // for what we forward to the CRM. Minimised: no lat/lng, no notes.
-  let lead: Record<string, unknown> = { property_id: propertyId, scan_id: scanId ?? null };
+  let row: LeadRow;
   if (db) {
     const { data, error } = await db
       .from("properties")
-      .select("id, parcel_id, address, status, first_flagged_at")
+      .select("id, parcel_id, address, status, first_flagged_at, verification")
       .eq("id", propertyId)
+      .is("archived_at", null)
       .maybeSingle();
     if (error || !data) return apiError("Property not found", 404);
-    if (data.status === "dispatched") return apiError("Property already dispatched", 409);
+    row = data as LeadRow;
 
     if (scanId) {
       const { data: scan } = await db
@@ -53,16 +66,38 @@ export const POST = withAuth(async (req, user) => {
         .maybeSingle();
       if (!scan) return apiError("scanId does not belong to this property", 400);
     }
-
-    lead = {
-      property_id: data.id,
-      parcel_id: data.parcel_id,
-      address: data.address,
-      status: data.status,
-      first_flagged_at: data.first_flagged_at,
-      scan_id: scanId ?? null,
+  } else {
+    const lead = mockGetProperty(propertyId);
+    if (!lead) return apiError("Property not found", 404);
+    row = {
+      id: lead.id,
+      parcel_id: lead.parcel_id,
+      address: lead.address,
+      status: lead.status,
+      first_flagged_at: lead.first_flagged_at,
+      verification: lead.verification ?? null,
     };
+    if (scanId && !mockScans(propertyId).some((s) => s.id === scanId)) {
+      return apiError("scanId does not belong to this property", 400);
+    }
   }
+
+  if (row.status === "dispatched") return apiError("Property already dispatched", 409);
+  if (row.verification && row.verification !== "verified_vacant") {
+    return apiError(
+      `Verdict is ${row.verification}; only verified_vacant leads can be dispatched`,
+      409,
+    );
+  }
+
+  const lead = {
+    property_id: row.id,
+    parcel_id: row.parcel_id,
+    address: row.address,
+    status: row.status,
+    first_flagged_at: row.first_flagged_at,
+    scan_id: scanId ?? null,
+  };
 
   let forwarded = false;
   if (webhook) {
@@ -96,6 +131,8 @@ export const POST = withAuth(async (req, user) => {
         { status: 500 },
       );
     }
+  } else {
+    mockUpdateProperty(propertyId, { status: "dispatched" });
   }
 
   pushEvent({

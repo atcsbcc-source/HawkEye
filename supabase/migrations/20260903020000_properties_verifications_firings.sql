@@ -8,15 +8,23 @@
 --     operator's verification verdict + snooze window
 --   * property_verifications — audited ground truth, one row per verdict
 --   * automation_rule_firings — idempotency ledger for the distress sweep
---   * auto_flag_property() no longer re-flags a snoozed false positive
+--   * auto_flag_property() no longer re-flags a snoozed parcel
 --   * distressed_properties re-exposes the new columns and hides archived rows
+--
+-- Guarded with if exists / if not exists (and a duplicate_object handler for
+-- the enum) so a re-run is safe, like 20260903010000.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
 -- Verdict enum
 -- ----------------------------------------------------------------------------
-create type public.verification_verdict as enum
-  ('verified_vacant', 'false_positive', 'occupied', 'needs_recheck');
+do $$
+begin
+  create type public.verification_verdict as enum
+    ('verified_vacant', 'false_positive', 'occupied', 'needs_recheck');
+exception
+  when duplicate_object then null;
+end $$;
 
 -- ----------------------------------------------------------------------------
 -- properties — new nullable columns (additive; existing rows unaffected)
@@ -43,7 +51,7 @@ update public.properties p
 -- ----------------------------------------------------------------------------
 -- property_verifications — operator ground truth (calibration input)
 -- ----------------------------------------------------------------------------
-create table public.property_verifications (
+create table if not exists public.property_verifications (
   id          uuid primary key default gen_random_uuid(),
   property_id uuid not null references public.properties (id) on delete cascade,
   scan_id     uuid references public.property_scans (id) on delete set null,
@@ -53,40 +61,33 @@ create table public.property_verifications (
   created_at  timestamptz not null default now()
 );
 
-create index property_verifications_property_idx
+create index if not exists property_verifications_property_idx
   on public.property_verifications (property_id, created_at desc);
 
 alter table public.property_verifications enable row level security;
 
+drop policy if exists "authenticated read property_verifications" on public.property_verifications;
 create policy "authenticated read property_verifications"
   on public.property_verifications for select to authenticated using (true);
--- Writes go through the service role (POST /api/properties/[id]/verify).
 
--- Every verdict lands in the audit stream.
-create or replace function public.log_property_verified()
-returns trigger
-language plpgsql
-set search_path = ''
-as $$
-begin
-  insert into public.audit_events (actor, event_type, subject_type, subject_id, detail)
-  values (coalesce(new.verified_by, 'operator'), 'property.verified', 'property',
-          new.property_id::text,
-          jsonb_build_object('verdict', new.verdict,
-                             'scan_id', new.scan_id,
-                             'verification_id', new.id));
-  return new;
-end $$;
+-- Writes go through the service role (POST /api/properties/[id]/verify). The
+-- dashboard role holds SELECT only — RLS is not the sole barrier.
+revoke insert, update, delete, truncate, references, trigger
+  on public.property_verifications from authenticated, anon;
+grant select on public.property_verifications to authenticated;
 
-create trigger property_verifications_audit_insert
-  after insert on public.property_verifications
-  for each row execute function public.log_property_verified();
+-- The verify route writes the `property.verified` audit event itself (with
+-- actor_user_id, the verdict note and whether the parcel was demoted). An
+-- earlier draft also logged it from an insert trigger, which produced two rows
+-- per verdict in the feed; make sure that trigger is gone.
+drop trigger if exists property_verifications_audit_insert on public.property_verifications;
+drop function if exists public.log_property_verified();
 
 -- ----------------------------------------------------------------------------
 -- automation_rule_firings — one row per (rule, subject); the sweep skips
 -- subjects already present so a lead is never dispatched twice.
 -- ----------------------------------------------------------------------------
-create table public.automation_rule_firings (
+create table if not exists public.automation_rule_firings (
   rule_id      uuid not null references public.automation_rules (id) on delete cascade,
   subject_type text not null,
   subject_id   text not null,
@@ -96,13 +97,20 @@ create table public.automation_rule_firings (
 
 alter table public.automation_rule_firings enable row level security;
 
+drop policy if exists "authenticated read automation_rule_firings" on public.automation_rule_firings;
 create policy "authenticated read automation_rule_firings"
   on public.automation_rule_firings for select to authenticated using (true);
 
+revoke insert, update, delete, truncate, references, trigger
+  on public.automation_rule_firings from authenticated, anon;
+grant select on public.automation_rule_firings to authenticated;
+
 -- ----------------------------------------------------------------------------
--- auto_flag_property — identical to 20260901 except it respects a snoozed
--- false-positive verdict (the operator said "not vacant"; do not re-flag for
--- the snooze window even if confidence stays high).
+-- auto_flag_property — identical to 20260901 except it respects the snooze
+-- window a demoting verdict (false_positive OR occupied) sets: the operator
+-- said "not vacant"; do not re-flag for the window even if confidence stays
+-- high. Only demoting verdicts ever set snoozed_until, so the window alone is
+-- the test.
 -- ----------------------------------------------------------------------------
 create or replace function public.auto_flag_property()
 returns trigger
@@ -117,9 +125,8 @@ begin
        set status           = case when status = 'dispatched' then status else 'flagged' end,
            first_flagged_at = coalesce(first_flagged_at, now())
      where id = new.property_id
-       and not (verification = 'false_positive'
-                and snoozed_until is not null
-                and snoozed_until > now());
+       and archived_at is null
+       and not (snoozed_until is not null and snoozed_until > now());
   end if;
   return new;
 end $$;

@@ -4,6 +4,7 @@ import {
   createMission,
   launchMission,
   listMissions,
+  MissionQueueFullError,
   syncMissionProgress,
 } from "@/lib/server/ops";
 import { withAuth } from "@/lib/server/auth";
@@ -13,15 +14,16 @@ import { rateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-const MAX_QUEUED = 20;
-const MAX_MISSIONS = 200;
-
 export const GET = withAuth(async () => {
   syncMissionProgress();
   return NextResponse.json({ missions: listMissions() });
 });
 
-/** POST { name, polygon: [lat,lng][] } — queue a new mapping mission. */
+/**
+ * POST { name, polygon: [lat,lng][] } — queue a new mapping mission. The store
+ * owns the caps (MISSION_QUEUE_CAP queued, MISSION_KEEP_CAP retained with
+ * finished missions pruned), so the route only maps its error to 409.
+ */
 export const POST = withAuth(async (req, user) => {
   const rl = rateLimit("missions:post", user.id, 20);
   if (!rl.ok) return rateLimitResponse(rl);
@@ -29,16 +31,13 @@ export const POST = withAuth(async (req, user) => {
   const body = await parseJson(req, MissionCreate);
   if (!body.ok) return body.res;
 
-  const existing = listMissions();
-  if (existing.length >= MAX_MISSIONS) {
-    return apiError("Mission list is full; abort or complete existing missions", 409);
+  try {
+    const mission = createMission(body.data.name, body.data.polygon);
+    return NextResponse.json({ mission });
+  } catch (err) {
+    if (err instanceof MissionQueueFullError) return apiError(err.message, 409);
+    throw err;
   }
-  if (existing.filter((m) => m.status === "queued").length >= MAX_QUEUED) {
-    return apiError(`At most ${MAX_QUEUED} missions may be queued`, 409);
-  }
-
-  const mission = createMission(body.data.name, body.data.polygon);
-  return NextResponse.json({ mission });
 });
 
 /** PATCH { id, action: "launch" | "abort" } — admin only. */

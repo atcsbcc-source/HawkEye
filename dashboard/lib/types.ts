@@ -11,6 +11,14 @@ export const VERIFICATION_VERDICTS: VerificationVerdict[] = [
   "needs_recheck",
 ];
 
+/** Human labels for verdicts — shared by server pages and client panels. */
+export const VERDICT_LABEL: Record<VerificationVerdict, string> = {
+  verified_vacant: "Verified vacant",
+  false_positive: "False positive",
+  occupied: "Occupied",
+  needs_recheck: "Needs recheck",
+};
+
 export interface Property {
   id: string;
   parcel_id: string;

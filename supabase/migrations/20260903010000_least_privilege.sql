@@ -36,9 +36,15 @@ create policy "authenticated update lead status/notes" on public.properties
 revoke all on all tables    in schema public from anon;
 revoke all on all sequences in schema public from anon;
 revoke all on all functions in schema public from anon;
-alter default privileges in schema public revoke all on tables    from anon;
-alter default privileges in schema public revoke all on sequences from anon;
-alter default privileges in schema public revoke all on functions from anon;
+-- Supabase's default privileges are defined FOR ROLE postgres (the migration
+-- runner); an unqualified ALTER DEFAULT PRIVILEGES would only bind to the
+-- executing role, so name it explicitly. Future tables then start with no
+-- anon grants and read-only grants for authenticated.
+alter default privileges for role postgres in schema public revoke all on tables    from anon;
+alter default privileges for role postgres in schema public revoke all on sequences from anon;
+alter default privileges for role postgres in schema public revoke all on functions from anon;
+alter default privileges for role postgres in schema public
+  revoke insert, update, delete, truncate, references, trigger on tables from authenticated;
 
 -- ----------------------------------------------------------------------------
 -- authenticated never inserts/deletes directly; writes go through the

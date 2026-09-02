@@ -36,6 +36,11 @@ function store(): MockStore {
   return g.__hawkeyeMockStore;
 }
 
+/** Test hook: drop the store so the next access re-seeds from lib/mock. */
+export function resetMockStore(): void {
+  delete g.__hawkeyeMockStore;
+}
+
 const daysSince = (iso: string | null): number | null =>
   iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000) : null;
 
@@ -52,9 +57,14 @@ export function mockListProperties(): PropertyLead[] {
     .map(withDerived);
 }
 
-export function mockGetProperty(id: string): PropertyLead | null {
+/** Archived parcels are invisible (as in Supabase mode) unless `includeArchived` is set. */
+export function mockGetProperty(
+  id: string,
+  opts: { includeArchived?: boolean } = {},
+): PropertyLead | null {
   const p = store().properties.find((x) => x.id === id);
-  return p ? withDerived(p) : null;
+  if (!p || (p.archived_at && !opts.includeArchived)) return null;
+  return withDerived(p);
 }
 
 export function mockFindByParcel(parcelId: string): PropertyLead | null {
@@ -104,22 +114,54 @@ export function mockUpsertProperty(input: NewPropertyInput): { id: string; creat
     existing.lat = input.lat;
     existing.lng = input.lng;
     if (input.neighborhood !== undefined) existing.neighborhood = input.neighborhood;
+    // Blank cells keep the existing note (same semantics as the DB upsert).
+    if (input.notes) existing.notes = input.notes;
     existing.archived_at = null;
     return { id: existing.id, created: false };
   }
   return { id: mockCreateProperty(input).id, created: true };
 }
 
+/** Un-archive a parcel and overwrite its editable fields (re-adding a tracked APN). */
+export function mockRestoreProperty(id: string, input: NewPropertyInput): PropertyLead | null {
+  const p = store().properties.find((x) => x.id === id);
+  if (!p) return null;
+  p.address = input.address;
+  p.lat = input.lat;
+  p.lng = input.lng;
+  p.neighborhood = input.neighborhood ?? null;
+  p.notes = input.notes ?? null;
+  p.archived_at = null;
+  return withDerived(p);
+}
+
 export function mockUpdateProperty(
   id: string,
   patch: Partial<
-    Pick<PropertyLead, "address" | "lat" | "lng" | "neighborhood" | "notes" | "status">
+    Pick<
+      PropertyLead,
+      "address" | "lat" | "lng" | "neighborhood" | "notes" | "status" | "first_flagged_at"
+    >
   >,
 ): PropertyLead | null {
   const p = store().properties.find((x) => x.id === id);
   if (!p) return null;
   Object.assign(p, patch);
   return withDerived(p);
+}
+
+/**
+ * Mock-mode counterpart of the Postgres auto_flag_property() trigger: promote
+ * to `flagged` and stamp first_flagged_at unless the parcel is dispatched,
+ * archived, unknown or inside a demoting verdict's snooze window.
+ */
+export function mockFlagProperty(id: string): boolean {
+  const p = store().properties.find((x) => x.id === id);
+  if (!p || p.archived_at || p.status === "dispatched") return false;
+  if (p.snoozed_until && new Date(p.snoozed_until).getTime() > Date.now()) return false;
+  p.status = "flagged";
+  p.first_flagged_at = p.first_flagged_at ?? new Date().toISOString();
+  return true;
 }
 
 export function mockArchiveProperty(id: string): boolean {

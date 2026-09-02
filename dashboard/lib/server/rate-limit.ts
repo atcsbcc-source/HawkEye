@@ -70,13 +70,26 @@ export function resetRateLimits(): void {
   store().clear();
 }
 
+/** True only when the operator opted in to trusting x-forwarded-* headers. */
+export function trustProxy(): boolean {
+  return process.env.TRUST_PROXY === "1";
+}
+
+/**
+ * Sentinel returned by `clientIp` when no per-client identity is available
+ * (self-hosted `next start` without TRUST_PROXY=1). Callers must not apply a
+ * tight shared cap to this subject — it would be one bucket for everyone.
+ */
+export const NO_CLIENT_IP = "direct";
+
 /**
  * Best-effort client IP. Only the first `x-forwarded-for` hop is trusted and
- * only when TRUST_PROXY=1; otherwise every direct client shares one bucket
- * (there is no socket address on a web-standard Request).
+ * only when TRUST_PROXY=1; otherwise the platform-provided `req.ip` (Vercel) is
+ * used, and `NO_CLIENT_IP` when there is none (there is no socket address on a
+ * web-standard Request).
  */
 export function clientIp(req: Request): string {
-  if (process.env.TRUST_PROXY === "1") {
+  if (trustProxy()) {
     const xff = req.headers.get("x-forwarded-for");
     const first = xff?.split(",")[0]?.trim();
     if (first) return first.slice(0, 64);
@@ -84,7 +97,7 @@ export function clientIp(req: Request): string {
     if (real) return real.slice(0, 64);
   }
   const ip = (req as { ip?: string }).ip;
-  return ip && ip.length > 0 ? ip.slice(0, 64) : "direct";
+  return ip && ip.length > 0 ? ip.slice(0, 64) : NO_CLIENT_IP;
 }
 
 /** 429 response with Retry-After. */
