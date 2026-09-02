@@ -3,18 +3,26 @@ node_modules/
 .next/
 out/
 *.tsbuildinfo
-next-env.d.ts
+coverage/
+dist/
 
 # Python
 __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
 
 # Env & secrets
 .env
 .env.local
 .env.*.local
+pipeline/.env
+pipeline/.env.*
+!pipeline/.env.example
 
 # OS / editor
 .DS_Store
@@ -24,3 +32,5 @@ venv/
 # Pipeline artifacts
 pipeline/debug_out/
 pipeline/data/
+pipeline/**/*.tif
+pipeline/**/*.tiff

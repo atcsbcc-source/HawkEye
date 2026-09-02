@@ -33,23 +33,23 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # Tunables — calibrate against your own flight data.
 # ---------------------------------------------------------------------------
-MAX_DIM = 1024                 # working resolution (longest edge)
+MAX_DIM = 1024  # working resolution (longest edge)
 ORB_FEATURES = 4000
 LOWE_RATIO = 0.75
-MIN_MATCHES = 12               # below this, alignment is untrusted
+MIN_MATCHES = 12  # below this, alignment is untrusted
 DIFF_BLUR_KSIZE = 7
-DIFF_THRESHOLD = 28            # abs L*-channel delta considered "changed"
-MORPH_KERNEL = 9               # opening kernel; kills speckle/transient noise
-SHADOW_L_DROP = 0.55           # luminance ratio below which a darkening pixel
-SHADOW_CHROMA_TOL = 22         #   with near-unchanged chroma is called shadow
+DIFF_THRESHOLD = 28  # abs L*-channel delta considered "changed"
+MORPH_KERNEL = 9  # opening kernel; kills speckle/transient noise
+SHADOW_L_DROP = 0.55  # luminance ratio below which a darkening pixel
+SHADOW_CHROMA_TOL = 22  #   with near-unchanged chroma is called shadow
 VEHICLE_AREA_M2 = (5.5, 32.0)  # plausible car/truck footprint
-VEHICLE_ASPECT = (1.3, 4.0)    # length/width of a minAreaRect
+VEHICLE_ASPECT = (1.3, 4.0)  # length/width of a minAreaRect
 VEHICLE_RECTANGULARITY = 0.55  # contour area / minAreaRect area
-VEHICLE_L_DELTA = 30           # L* deviation from pavement median = candidate
-VEHICLE_CHROMA_DELTA = 22      # chroma deviation from pavement median = candidate
-NODATA_GRAY = 8                # pixels darker than this are ortho nodata border
-STATIC_IOU = 0.45              # box IoU across weeks to call a vehicle static
-FLAG_LOW_ALIGNMENT = 0.30      # below this inlier ratio, cap confidence
+VEHICLE_L_DELTA = 30  # L* deviation from pavement median = candidate
+VEHICLE_CHROMA_DELTA = 22  # chroma deviation from pavement median = candidate
+NODATA_GRAY = 8  # pixels darker than this are ortho nodata border
+STATIC_IOU = 0.45  # box IoU across weeks to call a vehicle static
+FLAG_LOW_ALIGNMENT = 0.30  # below this inlier ratio, cap confidence
 
 
 @dataclass
@@ -78,8 +78,7 @@ def load_image(path: str | Path, max_dim: int = MAX_DIM) -> tuple[np.ndarray, fl
     h, w = img.shape[:2]
     scale = max_dim / max(h, w)
     if scale < 1.0:
-        img = cv2.resize(img, (int(w * scale), int(h * scale)),
-                         interpolation=cv2.INTER_AREA)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
         return img, scale
     return img, 1.0
 
@@ -101,8 +100,13 @@ def align_images(prev: np.ndarray, curr: np.ndarray) -> tuple[np.ndarray, float]
 
     matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
     raw = matcher.knnMatch(des1, des2, k=2)
-    good = [m for pair in raw if len(pair) == 2
-            for m, n in [pair] if m.distance < LOWE_RATIO * n.distance]
+    good = [
+        m
+        for pair in raw
+        if len(pair) == 2
+        for m, n in [pair]
+        if m.distance < LOWE_RATIO * n.distance
+    ]
     if len(good) < MIN_MATCHES:
         return prev, 0.0
 
@@ -134,8 +138,9 @@ def normalize_illumination(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np
     # Match mean L of b to a.
     mean_a, mean_b = la[:, :, 0].mean(), lb[:, :, 0].mean()
     if mean_b > 1:
-        lb[:, :, 0] = np.clip(lb[:, :, 0].astype(np.float32) * (mean_a / mean_b),
-                              0, 255).astype(np.uint8)
+        lb[:, :, 0] = np.clip(lb[:, :, 0].astype(np.float32) * (mean_a / mean_b), 0, 255).astype(
+            np.uint8
+        )
     return la, lb
 
 
@@ -147,11 +152,10 @@ def shadow_mask(lab_prev: np.ndarray, lab_curr: np.ndarray) -> np.ndarray:
     l1 = lab_curr[:, :, 0].astype(np.float32) + 1.0
     ratio = np.minimum(l0, l1) / np.maximum(l0, l1)
 
-    chroma_delta = (
-        cv2.absdiff(lab_prev[:, :, 1], lab_curr[:, :, 1]).astype(np.float32) +
-        cv2.absdiff(lab_prev[:, :, 2], lab_curr[:, :, 2]).astype(np.float32)
-    )
-    mask = ((ratio < SHADOW_L_DROP) & (chroma_delta < SHADOW_CHROMA_TOL))
+    chroma_delta = cv2.absdiff(lab_prev[:, :, 1], lab_curr[:, :, 1]).astype(
+        np.float32
+    ) + cv2.absdiff(lab_prev[:, :, 2], lab_curr[:, :, 2]).astype(np.float32)
+    mask = (ratio < SHADOW_L_DROP) & (chroma_delta < SHADOW_CHROMA_TOL)
     return (mask.astype(np.uint8)) * 255
 
 
@@ -184,9 +188,13 @@ def validity_mask(prev: np.ndarray, curr: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Persistent structural change
 # ---------------------------------------------------------------------------
-def persistent_change(lab_prev: np.ndarray, lab_curr: np.ndarray,
-                      shadows: np.ndarray, vegetation: np.ndarray,
-                      valid: np.ndarray) -> tuple[np.ndarray, float]:
+def persistent_change(
+    lab_prev: np.ndarray,
+    lab_curr: np.ndarray,
+    shadows: np.ndarray,
+    vegetation: np.ndarray,
+    valid: np.ndarray,
+) -> tuple[np.ndarray, float]:
     """Absolute diff on normalized L + chroma — shadow- and vegetation-masked,
     blurred, and morphologically opened so only persistent *structural*
     differences survive (vegetation change is the lawn index's job).
@@ -214,8 +222,9 @@ def persistent_change(lab_prev: np.ndarray, lab_curr: np.ndarray,
 # ---------------------------------------------------------------------------
 # Lawn growth index
 # ---------------------------------------------------------------------------
-def lawn_growth_index(prev: np.ndarray, curr: np.ndarray, veg: np.ndarray,
-                      valid: np.ndarray) -> tuple[float, dict]:
+def lawn_growth_index(
+    prev: np.ndarray, curr: np.ndarray, veg: np.ndarray, valid: np.ndarray
+) -> tuple[float, dict]:
     """Excess-green vegetation index plus texture (Laplacian variance) over the
     vegetated region.
 
@@ -228,7 +237,7 @@ def lawn_growth_index(prev: np.ndarray, curr: np.ndarray, veg: np.ndarray,
     """
     exg_prev, exg_curr = exg(prev), exg(curr)
     veg = veg & valid
-    if veg.mean() < 0.02:                          # no lawn in frame
+    if veg.mean() < 0.02:  # no lawn in frame
         return 0.0, {"vegetated_fraction": round(float(veg.mean()), 4)}
 
     h, w = veg.shape
@@ -257,8 +266,9 @@ def lawn_growth_index(prev: np.ndarray, curr: np.ndarray, veg: np.ndarray,
 # ---------------------------------------------------------------------------
 # Vehicle presence / persistence
 # ---------------------------------------------------------------------------
-def detect_vehicle_boxes(img: np.ndarray, gsd_cm: float, vegetation: np.ndarray,
-                         valid: np.ndarray) -> list[tuple[int, int, int, int]]:
+def detect_vehicle_boxes(
+    img: np.ndarray, gsd_cm: float, vegetation: np.ndarray, valid: np.ndarray
+) -> list[tuple[int, int, int, int]]:
     """Heuristic car detector: car-footprint, roughly rectangular blobs whose
     color stands out from the surrounding pavement (L* or chroma deviation from
     the non-vegetated median). Color segmentation survives pavement-joint and
@@ -266,9 +276,9 @@ def detect_vehicle_boxes(img: np.ndarray, gsd_cm: float, vegetation: np.ndarray,
     gray car on gray pavement — swap in a YOLO detector behind this signature
     for production without touching callers."""
     px_per_m = 100.0 / gsd_cm
-    area_px = (VEHICLE_AREA_M2[0] * px_per_m ** 2, VEHICLE_AREA_M2[1] * px_per_m ** 2)
+    area_px = (VEHICLE_AREA_M2[0] * px_per_m**2, VEHICLE_AREA_M2[1] * px_per_m**2)
 
-    stat = (~vegetation) & valid          # pavement/roof pixels with real data
+    stat = (~vegetation) & valid  # pavement/roof pixels with real data
     if stat.mean() < 0.01:
         return []
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)
@@ -277,8 +287,8 @@ def detect_vehicle_boxes(img: np.ndarray, gsd_cm: float, vegetation: np.ndarray,
     median_chroma = np.median(chroma[stat])
 
     candidates = (
-        (np.abs(lab[:, :, 0] - median_l) > VEHICLE_L_DELTA) |
-        (chroma - median_chroma > VEHICLE_CHROMA_DELTA)
+        (np.abs(lab[:, :, 0] - median_l) > VEHICLE_L_DELTA)
+        | (chroma - median_chroma > VEHICLE_CHROMA_DELTA)
     ) & stat
 
     mask = candidates.astype(np.uint8) * 255
@@ -323,9 +333,13 @@ def vehicle_signals(prev_boxes: list, curr_boxes: list) -> tuple[bool, bool]:
 # ---------------------------------------------------------------------------
 # Composite confidence
 # ---------------------------------------------------------------------------
-def compute_vacancy_confidence(change_score: float, lgi: float,
-                               vehicle_present: bool, vehicle_static: bool,
-                               alignment_quality: float) -> int:
+def compute_vacancy_confidence(
+    change_score: float,
+    lgi: float,
+    vehicle_present: bool,
+    vehicle_static: bool,
+    alignment_quality: float,
+) -> int:
     """Weighted heuristic, 0-100. A vacant property reads as: lawn overgrowing,
     a vehicle that never moves (or none at all), and little other week-over-week
     activity. Weights are a starting point — tune against ground-truthed leads.
@@ -354,8 +368,12 @@ def compute_vacancy_confidence(change_score: float, lgi: float,
 # ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
-def analyze_pair(prev_path: str | Path, curr_path: str | Path,
-                 gsd_cm: float = 2.5, debug_dir: str | Path | None = None) -> ScanResult:
+def analyze_pair(
+    prev_path: str | Path,
+    curr_path: str | Path,
+    gsd_cm: float = 2.5,
+    debug_dir: str | Path | None = None,
+) -> ScanResult:
     prev, _ = load_image(prev_path)
     curr, curr_scale = load_image(curr_path)
     if prev.shape != curr.shape:
@@ -377,7 +395,8 @@ def analyze_pair(prev_path: str | Path, curr_path: str | Path,
     vehicle_present, vehicle_static = vehicle_signals(prev_boxes, curr_boxes)
 
     confidence = compute_vacancy_confidence(
-        change_score, lgi, vehicle_present, vehicle_static, quality)
+        change_score, lgi, vehicle_present, vehicle_static, quality
+    )
 
     if debug_dir:
         debug = Path(debug_dir)
@@ -387,7 +406,7 @@ def analyze_pair(prev_path: str | Path, curr_path: str | Path,
         cv2.imwrite(str(debug / "change_mask.png"), change_mask)
         overlay = curr.copy()
         overlay[change_mask > 0] = (0, 0, 255)
-        for (x, y, w, h) in curr_boxes:
+        for x, y, w, h in curr_boxes:
             cv2.rectangle(overlay, (x, y), (x + w, y + h), (0, 255, 255), 2)
         cv2.imwrite(str(debug / "overlay.jpg"), cv2.addWeighted(curr, 0.6, overlay, 0.4, 0))
 
@@ -412,14 +431,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="HawkEye week-over-week property change detector")
     ap.add_argument("--prev", required=True, help="Week T-1 crop")
     ap.add_argument("--curr", required=True, help="Week T crop")
-    ap.add_argument("--gsd-cm", type=float, default=2.5,
-                    help="Ground sample distance of the crops, cm/px (default 2.5)")
+    ap.add_argument(
+        "--gsd-cm",
+        type=float,
+        default=2.5,
+        help="Ground sample distance of the crops, cm/px (default 2.5)",
+    )
     ap.add_argument("--debug-dir", default=None, help="Write masks/overlays here")
     ap.add_argument("--out", default=None, help="Write result JSON here (default stdout)")
     args = ap.parse_args()
 
-    result = analyze_pair(args.prev, args.curr, gsd_cm=args.gsd_cm,
-                          debug_dir=args.debug_dir)
+    result = analyze_pair(args.prev, args.curr, gsd_cm=args.gsd_cm, debug_dir=args.debug_dir)
     payload = result.to_json()
     if args.out:
         Path(args.out).write_text(payload)
