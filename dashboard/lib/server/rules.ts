@@ -3,7 +3,8 @@ import { getServiceSupabase } from "../supabase";
 import { AUTO_FLAG_CONFIDENCE, DISTRESS_THRESHOLD_DAYS } from "../constants";
 import type { AutomationRule, TriggerType } from "../ops-types";
 import { selectFiringRules } from "../automation/evaluate";
-import { defaultActionDeps, executeAction } from "../automation/actions";
+import { executeAction, type ActionDeps } from "../automation/actions";
+import { postJson as safePostJson } from "./safe-fetch";
 import { pushEvent } from "./audit";
 import { must } from "./db";
 import { getOpsState } from "./state";
@@ -177,7 +178,9 @@ export async function evaluateRules(
   payload: Record<string, unknown>,
 ): Promise<EvaluationResult> {
   const { candidates, firing } = selectFiringRules(await listRules(), trigger, payload);
-  const deps = defaultActionDeps(getServiceSupabase());
+  // Webhooks go through the SSRF-safe, signed, timeout-bounded poster
+  // (assertSafeWebhookUrl runs inside safePostJson before every request).
+  const deps: ActionDeps = { db: getServiceSupabase(), postJson: safePostJson };
   const fired: string[] = [];
 
   for (const rule of firing) {

@@ -1,7 +1,6 @@
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import type { PropertyScan } from "@/lib/types";
-
-const AUTO_FLAG_CONFIDENCE = 75;
+import { AUTO_FLAG_CONFIDENCE } from "@/lib/constants";
 
 interface Series {
   key: string;

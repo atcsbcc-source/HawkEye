@@ -100,6 +100,7 @@ export const POST = withAuth(async (req, user) => {
 
   pushEvent({
     actor: user.email,
+    actorUserId: user.id,
     eventType: "lead.dispatched",
     subjectType: "property",
     subjectId: propertyId,

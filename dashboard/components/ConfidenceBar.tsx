@@ -1,8 +1,9 @@
 import clsx from "clsx";
+import { AUTO_FLAG_CONFIDENCE, CONFIDENCE_WARN } from "@/lib/constants";
 
-// Thresholds mirror the pipeline's auto-flag rule (75) and review band (50).
-const FLAG_THRESHOLD = 75;
-const REVIEW_THRESHOLD = 50;
+// Thresholds mirror the pipeline's auto-flag rule and review band.
+const FLAG_THRESHOLD = AUTO_FLAG_CONFIDENCE;
+const REVIEW_THRESHOLD = CONFIDENCE_WARN;
 
 /**
  * Vacancy-confidence meter (0–100) with the auto-flag tick at 75.

@@ -25,8 +25,9 @@ export const WEBHOOK_TIMEOUT_MS = 8_000;
 
 /**
  * Plain-fetch webhook poster: bounded by a timeout, never follows redirects.
- * Integration note: swap for lib/server/safe-fetch's `safePostJson` (and call
- * `assertSafeWebhookUrl` first) once the security package is merged.
+ * Used only by tests / `defaultActionDeps`; the server (lib/server/rules.ts)
+ * injects lib/server/safe-fetch's `postJson`, which validates the URL against
+ * private/loopback ranges (SSRF) and signs the body before posting.
  */
 export async function defaultPostJson(url: string, body: unknown): Promise<{ status: number }> {
   const res = await fetch(url, {
@@ -120,6 +121,12 @@ async function dispatchWebhook(
   } catch (err) {
     const ms = Date.now() - started;
     const message = err instanceof Error ? err.message : String(err);
-    return { ok: false, eventType: "webhook.failed", detail: { error: message, ms } };
+    // safe-fetch's WebhookError carries a `kind` (unsafe_url|timeout|network|http).
+    const kind = (err as { kind?: unknown })?.kind;
+    return {
+      ok: false,
+      eventType: "webhook.failed",
+      detail: { error: message, ms, ...(typeof kind === "string" ? { kind } : {}) },
+    };
   }
 }

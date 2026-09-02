@@ -55,10 +55,8 @@ export const PATCH = withAuth(async (req, user) => {
   if (!body.ok) return body.res;
   const { id, enabled } = body.data;
 
-  // setRuleEnabled returns void today; integrator may swap to its boolean return.
-  const exists = (await listRules()).some((r) => r.id === id);
-  if (!exists) return apiError("Rule not found", 404);
-
-  await setRuleEnabled(id, enabled);
+  // setRuleEnabled resolves false when no rule matched the id.
+  const found = await setRuleEnabled(id, enabled);
+  if (!found) return apiError("Rule not found", 404);
   return NextResponse.json({ ok: true });
 });

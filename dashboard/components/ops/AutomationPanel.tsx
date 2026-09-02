@@ -12,6 +12,7 @@ import {
   type TriggerType,
 } from "@/lib/ops-types";
 import { fmtDateTime } from "@/lib/format";
+import { AUTO_FLAG_CONFIDENCE, DISTRESS_THRESHOLD_DAYS } from "@/lib/constants";
 import { useToast } from "@/components/ui/Toast";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { RefreshBadge } from "@/components/ui/RefreshBadge";
@@ -19,8 +20,8 @@ import { AuditFeed } from "./AuditFeed";
 
 // Defaults mirror the pipeline's auto-flag confidence and the distress window
 // (integrator swaps for lib/constants.ts).
-const DEFAULT_MIN_CONFIDENCE = 75;
-const DEFAULT_MIN_DAYS = 60;
+const DEFAULT_MIN_CONFIDENCE = AUTO_FLAG_CONFIDENCE;
+const DEFAULT_MIN_DAYS = DISTRESS_THRESHOLD_DAYS;
 
 export function AutomationPanel() {
   const toast = useToast();

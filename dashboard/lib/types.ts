@@ -91,4 +91,4 @@ export interface PropertyLead extends Property {
 }
 
 /** Operator-confirmed threshold: leads distressed at least this long get pushed. */
-export const DISTRESS_THRESHOLD_DAYS = 60;
+export { DISTRESS_THRESHOLD_DAYS } from "./constants";

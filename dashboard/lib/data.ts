@@ -16,8 +16,7 @@ import type {
   PropertyVerification,
 } from "./types";
 
-/** Confidence at which the DB trigger auto-flags a parcel (mirrors auto_flag_property). */
-const AUTO_FLAG_CONFIDENCE = 75;
+import { AUTO_FLAG_CONFIDENCE } from "./constants";
 
 /** All properties joined with their latest scan signals. Falls back to the
  *  in-process mock store when Supabase isn't configured (see .env.example). */

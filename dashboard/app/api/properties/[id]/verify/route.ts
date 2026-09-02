@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getServiceSupabase } from "@/lib/supabase";
 import { mockRecordVerification } from "@/lib/server/mock-store";
 import { pushEvent } from "@/lib/server/ops";
+import { getUser } from "@/lib/server/auth";
 import { VERIFICATION_VERDICTS, type VerificationVerdict } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const demote = verdict === "false_positive" || verdict === "occupied";
   const now = new Date();
 
+  // Middleware already gates this route; resolve the session for attribution.
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const verifiedBy = user.email || "operator";
+
   const db = getServiceSupabase();
   let verification: unknown;
   let property: unknown;
@@ -56,7 +62,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const { data: v, error: vErr } = await db
       .from("property_verifications")
-      .insert({ property_id: params.id, scan_id: scanId, verdict, note, verified_by: "operator" })
+      .insert({ property_id: params.id, scan_id: scanId, verdict, note, verified_by: verifiedBy })
       .select()
       .single();
     if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
@@ -77,14 +83,21 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
     property = p;
   } else {
-    const res = mockRecordVerification({ property_id: params.id, verdict, note, scan_id: scanId });
+    const res = mockRecordVerification({
+      property_id: params.id,
+      verdict,
+      note,
+      scan_id: scanId,
+      verified_by: verifiedBy,
+    });
     if (!res) return NextResponse.json({ error: "Property not found" }, { status: 404 });
     verification = res.verification;
     property = res.property;
   }
 
   pushEvent({
-    actor: "operator",
+    actor: verifiedBy,
+    actorUserId: user.id,
     eventType: "property.verified",
     subjectType: "property",
     subjectId: params.id,

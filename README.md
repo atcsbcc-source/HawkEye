@@ -173,25 +173,111 @@ npm run dev
 
 ### Authentication
 
-<!-- INTEGRATOR: fill from the security package summary (login/invite flow,
-     roles, Supabase dashboard settings, HAWKEYE_PIPELINE_TOKEN, CRON_SECRET). -->
+Every page and API route sits behind **Supabase Auth** (cookie sessions via
+`@supabase/ssr`, refreshed by `dashboard/middleware.ts`). With
+`NEXT_PUBLIC_SUPABASE_URL` unset the console runs in **DEV MODE**: no login, an
+amber `DEV MODE · no auth · mock data` badge in the header, and mock data.
 
-_Placeholder — to be completed._
+- **Sign-ups are invite-only.** Invite an operator from a machine that has the
+  service-role key:
+  `SITE_URL=<deployed origin> npx tsx dashboard/scripts/invite-user.ts <email> [operator|admin]`.
+  The invite e-mail lands on `/auth/confirm`, which verifies the token hash and
+  sends the user to `/auth/set-password`.
+- **Roles** live in `app_metadata.role`: `admin` can launch/abort missions and
+  call the manual rule evaluator; `operator` can do everything else.
+  Unauthenticated `/api/*` calls get `401` JSON; pages redirect to
+  `/login?next=`.
+- **CSRF**: cookie-authenticated mutations must send
+  `Content-Type: application/json` from the same origin (`Sec-Fetch-Site` /
+  `Origin` are checked; set `TRUST_PROXY=1` behind Vercel/nginx so the
+  forwarded host is trusted).
+- **Machine tokens** bypass the cookie gate on two routes only:
+  `HAWKEYE_PIPELINE_TOKEN` (>= 32 chars, `openssl rand -hex 32`) for the
+  pipeline's `POST /api/automation/evaluate`, and `CRON_SECRET` for
+  `GET|POST /api/automation/sweep` (Vercel Cron sends it automatically). Both are
+  compared in constant time.
+- **Outbound webhooks** (`CRM_WEBHOOK_URL`, rule `dispatch_webhook` actions) go
+  through `lib/server/safe-fetch.ts`: https only, public hosts only (SSRF
+  ranges blocked, optional `WEBHOOK_ALLOWED_HOSTS`), no redirects, 8 s timeout,
+  and — when `WEBHOOK_SIGNING_SECRET` is set — signed with
+  `x-hawkeye-timestamp` + `x-hawkeye-signature = hex(HMAC-SHA256(secret, "${ts}.${body}"))`.
+- **Production boot check**: `next start` refuses to run without Supabase unless
+  `HAWKEYE_ALLOW_DEV_MODE=1` (`npm run dev` and `npm run build` are unaffected).
+  Security headers (CSP, HSTS in prod, `X-Frame-Options: DENY`, COOP, ...) ship
+  from `next.config.mjs`.
+
+Supabase dashboard settings to flip: Email provider ON with *Allow new users to
+sign up* OFF; leaked-password protection ON; Site URL = deployed origin and
+Redirect URL `<origin>/auth/confirm`; Invite / Reset e-mail templates linking to
+`{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type={{ .Type }}`.
+`dashboard/.env.example` lists every key.
 
 ### Features added 2026-09
 
-<!-- INTEGRATOR: fill from the features package summary (properties import
-     format, verification semantics, sweep cron, flights, KMZ import steps for
-     DJI Fly / Pilot 2). -->
+- **Properties** — `Add property` (`/properties/new`), edit
+  (`/properties/[id]/edit`), and `Import parcels` (CSV with header
+  `parcel_id,address,lat,lng[,neighborhood,notes]` in any order/case, or a
+  GeoJSON `FeatureCollection` of Point / Polygon / MultiPolygon features —
+  polygons use their centroid). The import dry-run previews new / updated /
+  invalid rows with row numbers, then upserts on `parcel_id` (5 MB max).
+  `DELETE` is a soft archive (`archived_at`).
+- **Verification** — on the detail page an operator records
+  `verified_vacant` / `false_positive` / `occupied` / `needs_recheck`. Verdicts
+  land in `property_verifications` and are audited as `property.verified`;
+  `false_positive` and `occupied` return the parcel to `active`, clear
+  `first_flagged_at` and set `snoozed_until = now + 8 weeks`, during which the
+  `auto_flag_property()` trigger will not re-flag it. Dispatch is disabled while
+  the verdict is anything but `verified_vacant`.
+- **Distress sweep** — `POST|GET /api/automation/sweep` with
+  `Authorization: Bearer $CRON_SECRET` evaluates enabled `distress_threshold`
+  rules against flagged parcels past `min_days`, once per (rule, parcel) via
+  `automation_rule_firings`; a fired `dispatch_webhook` rule marks the parcel
+  `dispatched`. `dashboard/vercel.json` schedules it daily at 13:00 UTC; plain
+  cron alternative:
+  `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<host>/api/automation/sweep`.
+  The `Run sweep now` button on `/automation` calls it same-origin.
+- **Flights** — create the flight row on `/flights` before running the pipeline;
+  `/flights/[id]` lists what it processed and prints the exact
+  `crop_parcels.py` / `run_pipeline.py` commands.
+- **Mission export (KMZ/KML)** — on `/operations` click the download icon on a
+  mission: **KMZ** is DJI WPML (`wpmz/template.kml` + `wpmz/waylines.wpml`,
+  90 m AGL, 75 / 65 % overlap, Mavic 3 Classic camera model, optional
+  `?altitude=&front=&side=`), **KML** opens in Google Earth. Import in **DJI
+  Pilot 2** (RC Pro): copy the `.kmz` to the RC's
+  `DJI/com.dji.industry.pilot/waypoint/` folder or use *Flight Route → Import*.
+  The consumer **DJI Fly** app does not import WPML directly — open the KML in
+  Google Earth / a third-party waypoint app and fly the same serpentine.
+- **Lead export** — `Export CSV` on the command center, or
+  `/api/leads/export?format=csv|geojson&status=&neighborhood=&minDays=`.
 
-_Placeholder — to be completed._
+New migration `20260903020000_properties_verifications_firings.sql` adds the
+verification / snooze / archive columns, `property_verifications`,
+`automation_rule_firings` and recreates `distressed_properties`.
 
 ### Console UI notes
 
-<!-- INTEGRATOR: fill from the ui package summary (design tokens, colour rules,
-     header/SessionChip placement). -->
-
-_Placeholder — to be completed._
+- **Colour rule** — amber = primary action + flagged/attention; cyan = aircraft
+  and mission activity; emerald = done/idle/dispatched; red = threshold, abort,
+  stale; sky = selection/focus only.
+- **Tokens** live in `dashboard/tailwind.config.ts` (`surface.*`, `status.*`,
+  `drone.*`, `text-label` = 11 px floor) and `dashboard/lib/ui/status.ts`
+  (`LEAD_STATUS` / `MISSION_STATUS` / `DRONE_STATE` → `StatusBadge`).
+  Component classes in `app/globals.css`: `.panel`, `.panel-title`, `.kicker`,
+  `.btn-primary` (h-9, amber), `.btn-secondary` / `.btn-ghost` (h-8),
+  `.btn-danger`, `.input`. Spacing rhythm 4/8/16/24 (`p-4` panels, `gap-4`
+  between panels, `space-y-6` between sections).
+- **Shell** — `components/shell/{Sidebar,Header,MobileNav}`; the header's
+  `actions` slot hosts the auth `SessionChip` (user e-mail + sign-out, or the
+  DEV MODE badge). Route titles use the layout's `%s · HawkEye` template.
+- **Dates** render in `NEXT_PUBLIC_OPS_TZ` (default `America/New_York`) via
+  `lib/format.ts`; relative times render only after mount (`lib/ui/useNow.ts`).
+- **Telemetry rail** shows LIVE / CONNECTING / RECONNECTING / STALE (> 3 s
+  without a frame); the map draws a dashed "last known position" marker when
+  stale.
+- **Detail page** — Swipe / Side-by-side / Diff comparator (Diff only when the
+  scan has `image_url_diff`); slider supports arrows ±1, Shift ±10, Home/End;
+  ALIGN < 0.5 means the diff is unreliable. Dispatch is two-step (click, then
+  `Confirm dispatch (3s)`).
 
 ## Testing
 
@@ -205,7 +291,12 @@ mypy --config-file pipeline/pyproject.toml pipeline
 
 - Dashboard unit tests: vitest, `dashboard/__tests__/**/*.test.ts` mirroring
   `lib/` (rule evaluation, action execution with fake deps, simulator route
-  generation and a deterministic flight, audit store). No network.
+  generation and a deterministic flight, audit store), plus `__tests__/security`
+  (SSRF table, rate limiter, schemas), `__tests__/ui` (formatting, status maps,
+  nav) and `__tests__/features` (grid planner, WPML, import parsers, lead
+  export). No network.
+- Production smoke test in mock mode: `npm run build && HAWKEYE_ALLOW_DEV_MODE=1 npm start`
+  (a production server refuses to boot without Supabase otherwise).
 - Pipeline tests: pytest, `pipeline/tests/` on synthetic scenes and a
   synthetic EPSG:32617 GeoTIFF — alignment recovery, masks, change/lawn/vehicle
   signals, the confidence table, cropping and CSV validation.

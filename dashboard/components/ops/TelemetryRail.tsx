@@ -12,6 +12,7 @@ import {
 import type { Telemetry } from "@/lib/ops-types";
 import { AIRBORNE_STATES, DRONE_STATE } from "@/lib/ui/status";
 import { fmtAge } from "@/lib/format";
+import { LOW_BATTERY_PCT, LOW_LINK_PCT } from "@/lib/constants";
 import { Cell } from "@/components/ui/Cell";
 
 export type LinkState = "connecting" | "live" | "reconnecting" | "stale";
@@ -31,8 +32,8 @@ const LINK_PILL: Record<LinkState, { label: string; className: string }> = {
 
 // Battery / link warning bands (integrator swaps for lib/constants.ts).
 const BATTERY_WARN = 40;
-const BATTERY_CRIT = 25;
-const LINK_WARN = 60;
+const BATTERY_CRIT = LOW_BATTERY_PCT;
+const LINK_WARN = LOW_LINK_PCT;
 
 export function TelemetryRail({
   telemetry,
