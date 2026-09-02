@@ -72,11 +72,11 @@ its own icon:
   exists — and opens the browser; then use *Add to Dock* on that page. Closing
   the Terminal window stops the server.
 
-## Deployment (Vercel)
+## Deployment (Railway)
 
-The dashboard is a standard Next.js 14 app; `vercel.json` schedules the daily
-distress sweep. Project settings: **Root Directory `dashboard`**, Production
-Branch = the repo's default branch. Environment variables (Production):
+The dashboard runs as one Railway service built from this repo with
+**Root Directory `/dashboard`**, healthcheck `/login`, and deploy-on-push from
+the default branch. Environment variables (production):
 
 | Variable | Value |
 |---|---|
@@ -84,19 +84,23 @@ Branch = the repo's default branch. Environment variables (Production):
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | publishable / anon key (safe in the browser) |
 | `SUPABASE_SERVICE_ROLE_KEY` | service role key — server only, never `NEXT_PUBLIC_` |
 | `HAWKEYE_PIPELINE_TOKEN` | ≥ 32 chars; same value in `pipeline/.env` |
-| `CRON_SECRET` | ≥ 16 chars; Vercel Cron sends it to `/api/automation/sweep` |
+| `CRON_SECRET` | ≥ 16 chars; bearer token for `/api/automation/sweep` |
 | `WEBHOOK_SIGNING_SECRET` | optional HMAC key for outbound webhooks |
-| `TRUST_PROXY` | `1` (Vercel terminates TLS and sets `x-forwarded-*`) |
-| `SITE_URL` | the deployed origin, once known |
+| `TRUST_PROXY` / `TRUST_PROXY_HOPS` | `1` / `1` (Railway's edge sets `x-forwarded-*`) |
+| `SITE_URL` | the public origin |
 | `NEXT_PUBLIC_OPS_TZ` | IANA zone for every rendered time |
 | `CRM_WEBHOOK_URL` | optional CRM endpoint (https, public host) |
+
+Railway has no HTTP cron, so the daily distress sweep is triggered by
+`.github/workflows/sweep.yml` (13:00 UTC, or *Run workflow* by hand); add the
+repository secrets `HAWKEYE_URL` and `CRON_SECRET`. `vercel.json` keeps the
+equivalent Vercel Cron for anyone deploying there instead.
 
 The production boot guard refuses to start with `NEXT_PUBLIC_SUPABASE_URL` set
 but either key missing, and refuses DEV MODE entirely unless
 `HAWKEYE_ALLOW_DEV_MODE=1` — so a misconfigured deploy fails loudly instead of
 serving an unauthenticated console. After the first deploy, set Supabase →
-Authentication → URL Configuration (Site URL + `<origin>/auth/confirm`) and
-optionally Vercel Deployment Protection for an extra gate in front of `/login`.
+Authentication → URL Configuration (Site URL + `<origin>/auth/confirm`).
 
 ## Data modes
 

@@ -1,0 +1,29 @@
+name: Distress sweep
+
+# Daily trigger for the automation sweep (replaces Vercel Cron on Railway or
+# any host without a scheduler). Fires POST /api/automation/sweep with the
+# same CRON_SECRET the dashboard holds. Repository secrets required:
+#   HAWKEYE_URL   e.g. https://dashboard-production-2e791.up.railway.app
+#   CRON_SECRET   identical to the dashboard's CRON_SECRET
+on:
+  schedule:
+    - cron: "0 13 * * *" # 13:00 UTC daily
+  workflow_dispatch: {}
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Run sweep
+        env:
+          HAWKEYE_URL: ${{ secrets.HAWKEYE_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$HAWKEYE_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "HAWKEYE_URL and CRON_SECRET repository secrets are required" >&2; exit 1
+          fi
+          curl -fsS -X POST "$HAWKEYE_URL/api/automation/sweep" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --max-time 120 | tee sweep.json
