@@ -178,7 +178,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except static assets, the generated icons, and the auth surface.
-    "/((?!_next/static|_next/image|favicon\\.ico|icon|apple-icon|login|auth/|api/auth/).*)",
+    // Everything except static assets, the generated icons, the web-app manifest, and the auth surface.
+    "/((?!_next/static|_next/image|favicon\\.ico|icon|apple-icon|manifest\\.webmanifest|login|auth/|api/auth/).*)",
   ],
 };

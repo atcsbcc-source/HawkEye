@@ -57,6 +57,21 @@ Requires Node 22 (`dashboard/.nvmrc`; >= 20 works) and Python 3.11.
 | `dashboard/__tests__/` | vitest suites |
 | `CLAUDE.md` | Working rules for AI assistants (live-Supabase rule, conventions) |
 
+## Install on your Mac (Dock / Home Screen)
+
+The console ships a web-app manifest, so it installs as a standalone app with
+its own icon:
+
+- **Deployed (Vercel etc.)** — open the site in **Safari → File → Add to Dock**
+  (macOS Sonoma or later). It appears in the Dock and Launchpad and opens in
+  its own window. Chrome/Edge: address bar → *Install HawkEye*. iPhone/iPad:
+  Share → *Add to Home Screen*.
+- **Running locally** — double-click `dashboard/scripts/hawkeye.command`
+  (first time: right-click → Open). It builds if needed, starts the server on
+  `http://localhost:3000` — DEV MODE on mock data unless `dashboard/.env.local`
+  exists — and opens the browser; then use *Add to Dock* on that page. Closing
+  the Terminal window stops the server.
+
 ## Data modes
 
 | Mode | When | Behaviour |

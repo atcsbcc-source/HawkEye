@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: { default: "HawkEye Command Center", template: "%s · HawkEye" },
   description: "Drone-driven vacancy reconnaissance for distressed-property leads",
   applicationName: "HawkEye",
+  appleWebApp: { capable: true, title: "HawkEye", statusBarStyle: "black-translucent" },
 };
 
 export const viewport: Viewport = {
