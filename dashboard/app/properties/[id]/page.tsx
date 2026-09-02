@@ -8,6 +8,7 @@ import { DISTRESS_THRESHOLD_DAYS } from "@/lib/types";
 import { fmtDate, fmtDays } from "@/lib/format";
 import { LEAD_STATUS } from "@/lib/ui/status";
 import { CompareViewer, DispatchCard, VerificationProvider } from "@/components/CompareViewer";
+import { PropertyInsights } from "@/components/property/PropertyInsights";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SetHeaderTitle } from "@/components/shell/HeaderTitle";
 
@@ -31,6 +32,10 @@ export default async function PropertyDetail({ params }: { params: { id: string 
 
   const overThreshold = (lead.days_distressed ?? 0) >= DISTRESS_THRESHOLD_DAYS;
   const alreadyDispatched = lead.status === "dispatched";
+  const dispatchDisabledReason =
+    lead.verification && lead.verification !== "verified_vacant"
+      ? `Verdict is ${lead.verification}`
+      : null;
   const osmUrl = `https://www.openstreetmap.org/?mlat=${lead.lat}&mlon=${lead.lng}#map=19/${lead.lat}/${lead.lng}`;
 
   return (
@@ -57,6 +62,7 @@ export default async function PropertyDetail({ params }: { params: { id: string 
             alreadyDispatched={alreadyDispatched}
             address={lead.address}
           />
+          <PropertyInsights lead={lead} scans={scans} />
         </div>
 
         {/* Right rail */}
@@ -137,6 +143,7 @@ export default async function PropertyDetail({ params }: { params: { id: string 
               propertyId={lead.id}
               address={lead.address}
               alreadyDispatched={alreadyDispatched}
+              dispatchDisabledReason={dispatchDisabledReason}
             />
           </div>
         </aside>

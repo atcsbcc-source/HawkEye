@@ -9,6 +9,7 @@ import { useNow } from "@/lib/ui/useNow";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { SkeletonRows } from "@/components/ui/Skeleton";
 import { RefreshBadge } from "@/components/ui/RefreshBadge";
+import { MissionExportButton } from "@/components/missions/MissionExportButton";
 
 const VISIBLE = 6;
 
@@ -140,6 +141,7 @@ export function MissionQueue({
                           <span className="hidden xl:inline">RTB</span>
                         </button>
                       )}
+                      <MissionExportButton missionId={m.id} />
                     </div>
                   </div>
                 </div>

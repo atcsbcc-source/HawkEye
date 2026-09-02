@@ -4,6 +4,7 @@ import { DISTRESS_THRESHOLD_DAYS } from "@/lib/types";
 import { fmtDateTime, fmtRelative } from "@/lib/format";
 import { PropertyGrid } from "@/components/PropertyGrid";
 import { StatCard } from "@/components/StatCard";
+import { LeadActions } from "@/components/leads/LeadActions";
 
 export const dynamic = "force-dynamic";
 // Title falls back to the layout default ("HawkEye Command Center"): Next only
@@ -67,6 +68,7 @@ export default async function CommandCenter() {
         />
       </div>
 
+      <LeadActions />
       <PropertyGrid leads={leads} source={source} />
     </div>
   );
