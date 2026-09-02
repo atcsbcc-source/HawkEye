@@ -24,60 +24,86 @@ from __future__ import annotations
 
 import argparse
 import csv
+import logging
 import math
 import shutil
 import sys
 from pathlib import Path
+from typing import Any, TypedDict
 
 import numpy as np
 import rasterio
 from rasterio.warp import transform as warp_transform
 from rasterio.windows import Window
 
-DEFAULT_RADIUS_M = 22.0   # half-width of the crop window (44 m covers a lot + margin)
+from settings import configure_logging, load_env, require_env
+
+log = logging.getLogger("hawkeye")
+
+DEFAULT_RADIUS_M = 22.0  # half-width of the crop window (44 m covers a lot + margin)
 
 
-def load_parcels_csv(path: Path) -> list[dict]:
+class Parcel(TypedDict):
+    parcel_id: str
+    lat: float
+    lng: float
+
+
+def _validate_parcel(row: dict[str, Any], where: str) -> Parcel:
+    parcel_id = str(row.get("parcel_id") or "").strip()
+    if not parcel_id:
+        raise ValueError(f"{where}: parcel_id is empty")
+    try:
+        lat, lng = float(row["lat"]), float(row["lng"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"{where} (parcel {parcel_id}): lat/lng must be numbers") from exc
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lng <= 180.0):
+        raise ValueError(
+            f"{where} (parcel {parcel_id}): lat/lng {lat},{lng} out of range "
+            "(expected -90..90, -180..180 — swapped columns?)"
+        )
+    return {"parcel_id": parcel_id, "lat": lat, "lng": lng}
+
+
+def load_parcels_csv(path: Path) -> list[Parcel]:
     with open(path, newline="") as f:
-        rows = list(csv.DictReader(f))
-    for r in rows:
-        r["lat"], r["lng"] = float(r["lat"]), float(r["lng"])
-    return rows
+        reader = csv.DictReader(f)
+        # Row 1 is the header, so the first data row is line 2.
+        return [_validate_parcel(r, f"{path.name} line {i}") for i, r in enumerate(reader, 2)]
 
 
-def load_parcels_supabase() -> list[dict]:
+def load_parcels_supabase() -> list[Parcel]:
     """Fallback: pull every tracked property from Supabase (.env credentials)."""
-    import os
-
-    from dotenv import load_dotenv
     from supabase import create_client
 
-    load_dotenv()
-    db = create_client(os.environ["SUPABASE_URL"],
-                       os.environ["SUPABASE_SERVICE_ROLE_KEY"])
+    load_env()
+    db = create_client(require_env("SUPABASE_URL"), require_env("SUPABASE_SERVICE_ROLE_KEY"))
     data = db.table("properties").select("parcel_id, lat, lng").execute().data
-    return data
+    return [_validate_parcel(r, f"properties row {i}") for i, r in enumerate(data, 1)]
 
 
 def meters_per_pixel(ds: rasterio.DatasetReader, lat: float) -> tuple[float, float]:
     """Ground resolution (m/px) in x and y, handling projected and geographic CRSs."""
     res_x, res_y = ds.res
     if ds.crs and ds.crs.is_geographic:
-        return (res_x * 111_320.0 * math.cos(math.radians(lat)),
-                res_y * 110_540.0)
+        return (res_x * 111_320.0 * math.cos(math.radians(lat)), res_y * 110_540.0)
     return res_x, res_y
 
 
-def crop_parcel(ds: rasterio.DatasetReader, lat: float, lng: float,
-                radius_m: float) -> np.ndarray | None:
+def crop_parcel(
+    ds: rasterio.DatasetReader, lat: float, lng: float, radius_m: float
+) -> np.ndarray | None:
     """Read a (2*radius_m)^2 window centered on the parcel. None if outside."""
-    xs, ys = warp_transform("EPSG:4326", ds.crs, [lng], [lat])
     try:
-        row, col = ds.index(xs[0], ys[0])
-    except (IndexError, ValueError):
+        xs, ys = warp_transform("EPSG:4326", ds.crs, [lng], [lat])
+    except Exception as exc:  # rasterio raises private CPLE_* types for out-of-domain points
+        log.warning("parcel at %.5f,%.5f cannot be projected to %s: %s", lat, lng, ds.crs, exc)
         return None
-    if not (0 <= row < ds.height and 0 <= col < ds.width):
+    x, y = xs[0], ys[0]
+    b = ds.bounds
+    if not (b.left <= x <= b.right and b.bottom <= y <= b.top):
         return None
+    row, col = ds.index(x, y)
 
     mx, my = meters_per_pixel(ds, lat)
     half_w, half_h = int(radius_m / mx), int(radius_m / my)
@@ -91,37 +117,57 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Crop per-parcel imagery from a flight ortho")
     ap.add_argument("--ortho", required=True, type=Path, help="Georeferenced GeoTIFF")
     ap.add_argument("--flight-code", required=True)
-    ap.add_argument("--prev-flight-code", default=None,
-                    help="Prior flight whose current.jpg becomes this week's previous.jpg")
-    ap.add_argument("--parcels", type=Path, default=None,
-                    help="CSV of parcel_id,lat,lng (default: fetch from Supabase)")
+    ap.add_argument(
+        "--prev-flight-code",
+        default=None,
+        help="Prior flight whose current.jpg becomes this week's previous.jpg",
+    )
+    ap.add_argument(
+        "--parcels",
+        type=Path,
+        default=None,
+        help="CSV of parcel_id,lat,lng (default: fetch from Supabase)",
+    )
     ap.add_argument("--out", type=Path, default=Path("data"))
     ap.add_argument("--radius-m", type=float, default=DEFAULT_RADIUS_M)
     ap.add_argument("--jpeg-quality", type=int, default=92)
+    ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
+    configure_logging(args.verbose)
 
     import cv2  # after argparse so --help works without OpenCV
 
-    parcels = (load_parcels_csv(args.parcels) if args.parcels
-               else load_parcels_supabase())
+    try:
+        parcels = load_parcels_csv(args.parcels) if args.parcels else load_parcels_supabase()
+    except ValueError as exc:
+        log.error("%s", exc)
+        return 2
 
     written = skipped = unpaired = 0
     with rasterio.open(args.ortho) as ds:
         mx, my = meters_per_pixel(ds, parcels[0]["lat"]) if parcels else ds.res
-        print(f"[{args.flight_code}] ortho {ds.width}x{ds.height} px, "
-              f"~{mx * 100:.2f} cm/px — {len(parcels)} parcels")
+        log.info(
+            "[%s] ortho %dx%d px, ~%.2f cm/px — %d parcels",
+            args.flight_code,
+            ds.width,
+            ds.height,
+            mx * 100,
+            len(parcels),
+        )
 
         for p in parcels:
             crop = crop_parcel(ds, p["lat"], p["lng"], args.radius_m)
             if crop is None or not crop.any():
+                log.debug("  - %s: outside ortho, skipped", p["parcel_id"])
                 skipped += 1
                 continue
 
             parcel_dir = args.out / args.flight_code / p["parcel_id"]
             parcel_dir.mkdir(parents=True, exist_ok=True)
             bgr = cv2.cvtColor(crop, cv2.COLOR_RGB2BGR)
-            cv2.imwrite(str(parcel_dir / "current.jpg"), bgr,
-                        [cv2.IMWRITE_JPEG_QUALITY, args.jpeg_quality])
+            cv2.imwrite(
+                str(parcel_dir / "current.jpg"), bgr, [cv2.IMWRITE_JPEG_QUALITY, args.jpeg_quality]
+            )
             written += 1
 
             if args.prev_flight_code:
@@ -131,10 +177,18 @@ def main() -> int:
                 else:
                     unpaired += 1
 
-    print(f"  wrote {written} crops "
-          f"({skipped} outside ortho, {unpaired} without a previous week)")
-    print(f"  next: python run_pipeline.py --flight-code {args.flight_code} "
-          f"--data-dir {args.out} --gsd-cm {mx * 100:.2f}")
+    log.info(
+        "  wrote %d crops (%d outside ortho, %d without a previous week)",
+        written,
+        skipped,
+        unpaired,
+    )
+    log.info(
+        "  next: python run_pipeline.py --flight-code %s --data-dir %s --gsd-cm %.2f",
+        args.flight_code,
+        args.out,
+        mx * 100,
+    )
     return 0
 
 

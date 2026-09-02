@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hawkeye-pipeline"
+version = "0.1.0"
+description = "HawkEye CV pipeline: ortho crops, week-over-week change detection, Supabase upload"
+readme = "../README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+dependencies = [
+  "opencv-python-headless>=4.9",
+  "numpy>=1.26",
+  "rasterio>=1.3",
+  "supabase>=2.6",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.10"]
+
+# Flat module layout on purpose: the README commands (`python crop_parcels.py ...`)
+# stay valid and `import change_detector` keeps working from this directory.
+[tool.setuptools]
+py-modules = ["change_detector", "crop_parcels", "run_pipeline", "settings"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["data", "debug_out"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+filterwarnings = ["ignore::PendingDeprecationWarning:rasterio"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+# The repo-root `supabase/` (migrations) directory would otherwise shadow the
+# supabase-py package when mypy runs from the repository root.
+namespace_packages = false
+warn_unused_ignores = true
+check_untyped_defs = true
